@@ -1,14 +1,23 @@
-define( [], function() {
+function _parsePx( px ) {
+  if ( px && px.indexOf && px.indexOf( 'px' ) > -1 ) {
+    return parseInt( px.replace( 'px', '' ) );
+  }
+  return false;
+};
 
-  "use strict";
+function isNumeric( n ) {
+  return !isNaN( parseFloat( n ) ) && isFinite( n );
+}
 
-  /** 
-   * Positionning class
-   * @class Position
-   */
-  var Position = function( x, y, dx, dy ) {
+/**
+ * Utility class to compute positioning
+ * @class
+ */
+class Position {
 
-    if ( !( x instanceof Number ) && x instanceof Object ) {
+  constructor( x, y, dx, dy ) {
+
+    if ( typeof x == "object" ) {
       this.x = x.x;
       this.y = x.y;
       this.dx = x.dx;
@@ -19,26 +28,34 @@ define( [], function() {
       this.dx = dx;
       this.dy = dy;
     }
-  };
+  }
 
-  Position.prototype.compute = function( graph, xAxis, yAxis, serie ) {
+  /**
+   *  Computes the position of the position
+   *  @param {Graph} graph - The graph for which the position has to be computed
+   *  @param {AxisX} xAxis - The x axis to consider (has to belong to the graph)
+   *  @param {AxisY} yAxis - The y axis to consider (has to belong to the graph)
+   *  @param {Serie} [serie] - For non-existing y value, use a serie to compute it automatically from the serie data
+   *  @return {Object} An object in the format ```{x: xPx, y: yPx}``` containing the position in pixels of the position
+   */
+  compute( graph, xAxis, yAxis, serie ) {
 
     if ( !graph || !xAxis || !yAxis || !graph.hasXAxis || !graph.hasYAxis ) {
-      this.graph.throw();
+      graph.throw();
     }
 
     if ( !graph.hasXAxis( xAxis ) ) {
-      graph.throw( "Graph does not contain the x axis that was used as a parameter" )
+      throw ( "Graph does not contain the x axis that was used as a parameter" )
     }
 
     if ( !graph.hasYAxis( yAxis ) ) {
-      graph.throw( "Graph does not contain the x axis that was used as a parameter" )
+      throw ( "Graph does not contain the x axis that was used as a parameter" )
     }
 
     return this._compute( graph, xAxis, yAxis, serie );
   }
 
-  Position.prototype._compute = function( graph, xAxis, yAxis, serie ) {
+  _compute( graph, xAxis, yAxis, serie ) {
 
     var relativeTo = this._relativeTo;
     if ( relativeTo ) {
@@ -94,9 +111,7 @@ define( [], function() {
         }
 
       } else if ( val !== undefined ) {
-
         pos[ i ] = this.getPx( val, axis );
-
       }
 
       if ( dval !== undefined ) {
@@ -135,9 +150,9 @@ define( [], function() {
     }
 
     return pos;
-  };
+  }
 
-  Position.prototype._getPositionPx = function( value, x, axis, graph ) {
+  _getPositionPx( value, x, axis, graph ) {
 
     var parsed;
 
@@ -146,23 +161,26 @@ define( [], function() {
     }
 
     if ( ( parsed = this._parsePercent( value ) ) !== false ) {
-
       return parsed / 100 * ( x ? graph.getDrawingWidth() : graph.getDrawingHeight() );
-
     } else if ( axis ) {
-
       return axis.getPos( value );
     }
-  };
+  }
 
-  Position.prototype._parsePercent = function( percent ) {
+  _parsePercent( percent ) {
     if ( percent && percent.indexOf && percent.indexOf( '%' ) > -1 ) {
       return percent;
     }
     return false;
-  };
+  }
 
-  Position.getDeltaPx = function( value, axis ) {
+  /**
+   *  Computes the value in pixels of an amplitude (or a distance) for a certain axis
+   *  @param {Number} value - The value in axis unit
+   *  @param {Axis} Axis - The x axis to consider (has to belong to the graph)
+   *  @return {String} The value in pixels, e.g. "20px"
+   */
+  getDeltaPx( value, axis ) {
     var v;
     if ( ( v = _parsePx( value ) ) !== false ) {
       return ( v ) + "px";
@@ -172,7 +190,7 @@ define( [], function() {
     }
   };
 
-  Position.prototype.deltaPosition = function( mode, delta, axis ) {
+  deltaPosition( mode, delta, axis ) {
 
     mode = mode == 'y' ? 'y' : 'x';
     var ref = this[ mode ],
@@ -224,9 +242,9 @@ define( [], function() {
       }
 
     }
-  };
+  }
 
-  Position.prototype.getValPosition = function( rel, axis ) {
+  getValPosition( rel, axis ) {
 
     if ( rel == 'max' ) {
       return axis.getMaxValue();
@@ -237,13 +255,24 @@ define( [], function() {
     }
 
     return rel;
-  };
+  }
 
-  Position.prototype.getPx = function( value, axis, rel ) {
+  /**
+   *  Computes a value in pixels
+   *  @param {Number} value - The value in axis unit
+   *  @param {Axis} axis - The x or y axis to consider (has to belong to the graph)
+   *  @param {Boolean} rel - Whether or not the value is a distance 
+   *  @return {(Number|String)} The computed value
+   */
+  getPx( value, axis, rel ) {
 
     var parsed;
 
-    if ( ( parsed = _parsePx( value ) ) !== false ) {
+    if ( typeof value == "function" ) {
+
+      return value( axis, rel );
+
+    } else if ( ( parsed = _parsePx( value ) ) !== false ) {
 
       return parsed; // return integer (will be interpreted as px)
 
@@ -264,35 +293,51 @@ define( [], function() {
       } else if ( rel ) {
 
         return axis.getRelPx( value );
-      } else {
+
+      } else if ( isNumeric( value ) ) {
 
         return axis.getPos( value );
       }
     }
   };
 
-  Position.prototype.getPxRel = function( value, axis ) {
+  getPxRel( value, axis ) {
     return this.getPx( value, axis, true );
   };
 
-  Position.prototype.relativeTo = function( pos ) {
+  /**
+   *  Assigns the current position as relative to another. This is used when a position is used with "dx" or "dy" and not "x" or "y"
+   *  @param {Position} pos - The reference position
+   *  @return {Position} The current position
+   */
+  relativeTo( pos ) {
     this._relativeTo = Position.check( pos );
     return this;
-  };
+  }
 
-  Position.check = function( pos ) {
+  /**
+   *  Checks if an object is a position. If not, creates a new Position instance with the ```pos``` object. If a new position is created, ```callback``` is fired with the position as a unique parameter. The return of the function, if not false, should be a ```Position``` instance which serves as the reference position.
+   *  @example Position.check( { x: 1, y: 2 }, function() { return someOtherPosition; } );
+   *  @param {(Object|Position)} pos - The position object or the object fed into the constructor
+   *  @param {Function} callback - The callback fired if a new position is created
+   *  @return {Position} The resulting position object
+   */
+  static check( pos, callback ) {
     if ( pos instanceof Position ) {
       return pos;
     }
-    return new Position( pos );
-  }
 
-  function _parsePx( px ) {
-    if ( px && px.indexOf && px.indexOf( 'px' ) > -1 ) {
-      return parseInt( px.replace( 'px', '' ) );
+    var posObject = new Position( pos );
+
+    if ( pos && pos.relativeTo ) {
+      var position;
+      if ( position = callback( pos.relativeTo ) ) {
+        posObject.relativeTo( position );
+      }
     }
-    return false;
-  };
 
-  return Position;
-} );
+    return posObject;
+  }
+}
+
+export default Position;

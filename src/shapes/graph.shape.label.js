@@ -1,32 +1,24 @@
-define( [ './graph.shape' ], function( GraphShape ) {
+import GraphShape from './graph.shape'
 
-  /** 
-   * Represents a label that extends the Shape class
-   * @class LabelShape
-   * @augments Shape
-   * @see Graph#newShape
-   */
-  var LabelShape = function( graph, options ) {
-    this.selectStyle = {
-      stroke: 'red'
-    };
+/**
+ * Blank shape used to display label
+ * Use myShapelabel.setLabelText(); and associated methods
+ * @extend GraphShape
+ */
+class ShapeLabel extends GraphShape {
 
+  constructor( graph, options ) {
+
+    super( graph, options );
   }
 
-  LabelShape.prototype = new GraphShape();
+  createDom() {
+    return false
+  }
 
-  $.extend( LabelShape.prototype, GraphShape.prototype, {
+  applyPosition() {
+    return true;
+  }
+}
 
-    createDom: function() {
-      return false;
-    },
-
-    applyPosition: function() {
-      return true;
-    }
-
-  } );
-
-  return LabelShape;
-
-} );
+export default ShapeLabel;

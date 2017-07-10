@@ -1,54 +1,27 @@
-define( [ './graph.shape' ], function( GraphShape ) {
+import Shape from './graph.shape'
 
-  "use strict";
+/**
+ *  Displays a surface under a line serie
+ *  @extends GraphShape
+ */
+class ShapeSurfaceUnderCurve extends Shape {
 
-  var GraphSurfaceUnderCurve = function( graph ) {
+  createDom() {
+    this._dom = document.createElementNS( this.graph.ns, 'path' );
+  }
+
+  createHandles() {
+
+    this._createHandles( 2, 'line', {
+      'stroke-width': '3',
+      'stroke': 'transparent',
+      'pointer-events': 'stroke',
+      'cursor': 'ew-resize'
+    } );
 
   }
 
-  $.extend( GraphSurfaceUnderCurve.prototype, GraphShape.prototype, {
-    createDom: function() {
-
-      var self = this;
-      this._dom = document.createElementNS( this.graph.ns, 'path' );
-      //this._dom.setAttribute( 'pointer-events', 'stroke' );
-
-      /*			this.handle1 = document.createElementNS(this.graph.ns, 'line');
-			this.handle1.setAttribute(');
-
-			this.handle2 = document.createElementNS(this.graph.ns, 'line');
-			this.handle2.setAttribute('stroke-width', '3');
-			this.handle2.setAttribute('stroke', 'transparent');
-			this.handle2.setAttribute('pointer-events', 'stroke');
-			this.handle2.setAttribute('cursor', 'ew-resize');*/
-
-      //			this.setDom('cursor', 'move');
-      //			this.doDraw = undefined;
-
-      /*			this.graph.contextListen( this._dom, [
-				
-				['<li><a><span class="ui-icon ui-icon-cross"></span> Remove integral</a></li>', 
-				function(e) {
-					self.kill();
-					self.graph.triggerEvent('onAnnotationRemove', self.data);
-				}]
-
-			]);*/
-
-    },
-
-    createHandles: function() {
-
-      this._createHandles( 2, 'line', {
-        'stroke-width': '3',
-        'stroke': 'transparent',
-        'pointer-events': 'stroke',
-        'cursor': 'ew-resize'
-      } );
-
-    },
-
-    handleMouseMoveImpl: function( e, deltaX, deltaY ) {
+  handleMouseMoveImpl( e, deltaX, deltaY ) {
 
       if ( this.isLocked() ) {
         return;
@@ -82,7 +55,7 @@ define( [ './graph.shape' ], function( GraphShape ) {
       }
 
       this.applyPosition();
-    },
+    }
     /*
         redrawImpl: function() {
           //var doDraw = this.setPosition();
@@ -94,153 +67,139 @@ define( [ './graph.shape' ], function( GraphShape ) {
           }
         },
     */
-    applyPosition: function() {
+  applyPosition() {
 
-      if ( !this.serie ) {
+    if ( !this.serie ) {
+      return;
+    }
+
+    var posXY = this.computePosition( 0 ),
+      posXY2 = this.computePosition( 1 ),
+      w = Math.abs( posXY.x - posXY2.x ),
+      x = Math.min( posXY.x, posXY2.x );
+
+    //  this.reversed = x == posXY2.x;
+
+    if ( w < 2 || x + w < 0 || x > this.graph.getDrawingWidth() ) {
+      this.setDom( 'd', "" );
+      return false;
+    }
+
+    var v1 = this.serie.searchClosestValue( this.getPosition( 0 ).x ),
+      v2 = this.serie.searchClosestValue( this.getPosition( 1 ).x ),
+      v3,
+      i,
+      j,
+      init,
+      max,
+      k,
+      x,
+      y,
+      firstX,
+      firstY,
+      currentLine,
+      maxY = 0,
+      minY = Number.MAX_VALUE;
+
+    if ( !v1 || !v2 ) {
+      return false;
+    }
+
+    if ( v1.xBeforeIndex > v2.xBeforeIndex ) {
+      v3 = v1;
+      v1 = v2;
+      v2 = v3;
+
+      //this.handleSelected = ( this.handleSelected == 1 ) ? 2 : 1;
+    }
+
+    this.counter = 0;
+
+    for ( i = v1.dataIndex; i <= v2.dataIndex; i++ ) {
+      this.currentLine = "";
+      init = i == v1.dataIndex ? v1.xBeforeIndexArr : 0;
+      max = i == v2.dataIndex ? v2.xBeforeIndexArr : this.serie.data[ i ].length;
+      k = 0;
+
+      if ( init == max ) {
+        max++;
+      }
+
+      for ( j = init; j <= max; j += 2 ) {
+
+        x = this.serie.getX( this.serie.data[ i ][ j + 0 ] );
+        y = this.serie.getY( this.serie.data[ i ][ j + 1 ] );
+
+        maxY = Math.max( this.serie.data[ i ][ j + 1 ], maxY );
+        minY = Math.min( this.serie.data[ i ][ j + 1 ], minY );
+
+        if ( j == init ) {
+          this.firstX = x;
+          this.firstY = y;
+        }
+
+        if ( k > 0 ) {
+          this.currentLine += " L " + x + " " + y + " "
+        } else {
+          this.currentLine += " M " + x + " " + y + " ";
+        }
+
+        //this.serie._addPoint( x, y, false, this.currentLine );
+        k++;
+
+      }
+
+      this.lastX = x;
+      this.lastY = y;
+
+      if ( !this.firstX || !this.firstY || !this.lastX || !this.lastY ) {
         return;
       }
 
-      var posXY = this.computePosition( 0 ),
-        posXY2 = this.computePosition( 1 ),
-        w = Math.abs( posXY.x - posXY2.x ),
-        x = Math.min( posXY.x, posXY2.x );
+      this.currentLine += " V " + this.getYAxis().getPx( 0 ) + " H " + this.firstX + " z";
+      this.setDom( 'd', this.currentLine );
+    }
 
-      //  this.reversed = x == posXY2.x;
+    this.maxY = this.serie.getY( maxY );
+    this.setHandles();
 
-      if ( w < 2 || x + w < 0 || x > this.graph.getDrawingWidth() ) {
-        this.setDom( 'd', "" );
-        return false;
-      }
+    this.changed();
 
-      var v1 = this.serie.searchClosestValue( this.getPosition( 0 ).x ),
-        v2 = this.serie.searchClosestValue( this.getPosition( 1 ).x ),
-        v3,
-        i,
-        j,
-        init,
-        max,
-        k,
-        x,
-        y,
-        firstX,
-        firstY,
-        currentLine,
-        maxY = 0,
-        minY = Number.MAX_VALUE;
+    return true;
+  }
 
-      if ( !v1 || !v2 ) {
-        return false;
-      }
+  setHandles() {
 
-      if ( v1.xBeforeIndex > v2.xBeforeIndex ) {
-        v3 = v1;
-        v1 = v2;
-        v2 = v3;
+    if ( !this.firstX ) {
+      return;
+    }
 
-        //this.handleSelected = ( this.handleSelected == 1 ) ? 2 : 1;
-      }
+    var posXY = this.computePosition( 0 ),
+      posXY2 = this.computePosition( 1 );
 
-      this.counter = 0;
+    if ( posXY.x < posXY2.x ) {
 
-      for ( i = v1.dataIndex; i <= v2.dataIndex; i++ ) {
-        this.currentLine = "";
-        init = i == v1.dataIndex ? v1.xBeforeIndexArr : 0;
-        max = i == v2.dataIndex ? v2.xBeforeIndexArr : this.serie.data[ i ].length;
-        k = 0;
+      this.handles[ 1 ].setAttribute( 'x1', this.firstX );
+      this.handles[ 1 ].setAttribute( 'x2', this.firstX );
 
-        if ( init == max ) {
-          max++;
-        }
+      this.handles[ 2 ].setAttribute( 'x1', this.lastX );
+      this.handles[ 2 ].setAttribute( 'x2', this.lastX );
 
-        for ( j = init; j <= max; j += 2 ) {
+    } else {
 
-          x = this.serie.getX( this.serie.data[ i ][ j + 0 ] ),
-            y = this.serie.getY( this.serie.data[ i ][ j + 1 ] );
+      this.handles[ 1 ].setAttribute( 'x1', this.lastX );
+      this.handles[ 1 ].setAttribute( 'x2', this.lastX );
 
-          maxY = Math.max( this.serie.data[ i ][ j + 1 ], maxY );
-          minY = Math.min( this.serie.data[ i ][ j + 1 ], minY );
+      this.handles[ 2 ].setAttribute( 'x1', this.firstX );
+      this.handles[ 2 ].setAttribute( 'x2', this.firstX );
 
-          if ( j == init ) {
-            this.firstX = x;
-            this.firstY = y;
-          }
+    }
+    this.handles[ 1 ].setAttribute( 'y1', this.getYAxis().getMaxPx() );
+    this.handles[ 1 ].setAttribute( 'y2', this.serie.getY( 0 ) );
 
-          if ( k > 0 ) {
-            this.currentLine += " L " + x + " " + y + " "
-          } else {
-            this.currentLine += " M " + x + " " + y + " ";
-          }
+    this.handles[ 2 ].setAttribute( 'y1', this.getYAxis().getMaxPx() );
+    this.handles[ 2 ].setAttribute( 'y2', this.serie.getY( 0 ) );
+  }
+}
 
-          //this.serie._addPoint( x, y, false, this.currentLine );
-          k++;
-
-        }
-
-        this.lastX = x;
-        this.lastY = y;
-
-        if ( !this.firstX || !this.firstY || !this.lastX || !this.lastY ) {
-          return;
-        }
-
-        this.currentLine += " V " + this.getYAxis().getPx( 0 ) + " H " + this.firstX + " z";
-        this.setDom( 'd', this.currentLine );
-      }
-
-      this.maxY = this.serie.getY( maxY );
-      this.setHandles();
-      return true;
-    },
-
-    setHandles: function() {
-
-      if ( !this.firstX ) {
-        return;
-      }
-
-      var posXY = this.computePosition( 0 ),
-        posXY2 = this.computePosition( 1 );
-
-      if ( posXY.x < posXY2.x ) {
-
-        this.handles[ 1 ].setAttribute( 'x1', this.firstX );
-        this.handles[ 1 ].setAttribute( 'x2', this.firstX );
-
-        this.handles[ 2 ].setAttribute( 'x1', this.lastX );
-        this.handles[ 2 ].setAttribute( 'x2', this.lastX );
-
-      } else {
-
-        this.handles[ 1 ].setAttribute( 'x1', this.lastX );
-        this.handles[ 1 ].setAttribute( 'x2', this.lastX );
-
-        this.handles[ 2 ].setAttribute( 'x1', this.firstX );
-        this.handles[ 2 ].setAttribute( 'x2', this.firstX );
-
-      }
-      this.handles[ 1 ].setAttribute( 'y1', this.getYAxis().getMaxPx() );
-      this.handles[ 1 ].setAttribute( 'y2', this.serie.getY( 0 ) );
-
-      this.handles[ 2 ].setAttribute( 'y1', this.getYAxis().getMaxPx() );
-      this.handles[ 2 ].setAttribute( 'y2', this.serie.getY( 0 ) );
-    },
-
-    /*
-        setLabelPosition: function( labelIndex )  {
-
-          if ( this.firstX, this.lastX, this.lastPointY, this.firstPointY ) {
-            var x = ( this.firstX + this.lastX ) / 2 + "px";
-            var y = ( this.lastPointY + this.firstPointY ) / 2 + "px";
-            var flip = this.serie ? this.serie.isFlipped() :  false;
-
-            this._setLabelPosition( labelIndex, {
-              x: flip ? y : x,
-              y: flip ? x : y
-            } );
-          }
-        },*/
-
-  } );
-
-  return GraphSurfaceUnderCurve;
-} );
+export default ShapeSurfaceUnderCurve;

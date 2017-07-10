@@ -3,19 +3,18 @@ requirejs.config({
 
 	baseUrl: '../',
 	paths: {
-		'jquery': './src/dependencies/jquery/dist/jquery.min',
-		'graph': './dist/jsgraph'
+		'jquery': 'src/dependencies/jquery/dist/jquery'
 	}
 });
 
-require( [ 'jquery', './src/graph', './examples/series' ] , function( $, Graph, series ) {
+//import Graph from '../src/graph.core'
+
+require( [ 'dist/jsgraph-es6', 'examples/series' ] , function( disted, series ) {
 
 	window.contour = series.contour;
 	window.series = series.numeric;
-	window.Graph = Graph;
+	window.Graph = disted;	
 
-	var options = {};
-
-	require( [ './examples/loadexamples'] );
+	require( [ 'examples/loadexamples'] );
 	
 } );

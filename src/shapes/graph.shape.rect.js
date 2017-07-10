@@ -1,24 +1,24 @@
-define( [ './graph.shape', '../graph.util' ], function( GraphShape, util ) {
+import GraphShape from './graph.shape'
+import * as util from '../graph.util'
 
-  /** 
-   * Represents a rectangle that extends the Shape class
-   * @class RectangleShape
-   * @augments Shape
-   * @see Graph#newShape
-   */
-  var RectangleShape = function( graph, options ) {
+/** 
+ * Represents a rectangle that extends the Shape class
+ * @class ShapeRectangle
+ * @augments Shape
+ * @see Graph#newShape
+ */
+class ShapeRectangle extends GraphShape {
 
+  constructor( graph, options ) {
+    super( graph, options );
   }
-
-  RectangleShape.prototype = new GraphShape();
 
   /**
    * Creates the DOM
-   * @memberof RectangleShape
    * @private
    * @return {Shape} The current shape
    */
-  RectangleShape.prototype.createDom = function() {
+  createDom() {
     var self = this;
     this._dom = document.createElementNS( this.graph.ns, 'rect' );
 
@@ -27,15 +27,14 @@ define( [ './graph.shape', '../graph.util' ], function( GraphShape, util ) {
     this.setFillColor( 'transparent' );
 
     return this;
-  };
+  }
 
   /**
    * Creates the Handles
-   * @memberof RectangleShape
    * @private
    * @return {Shape} The current shape
    */
-  RectangleShape.prototype.createHandles = function() {
+  createHandles() {
     if ( !this.hasHandles() ) {
       return;
     }
@@ -123,35 +122,37 @@ define( [ './graph.shape', '../graph.util' ], function( GraphShape, util ) {
 
     }
     return this;
-  };
+  }
 
   /**
    * Updates the position
-   * @memberof RectangleShape
+   * @memberof ShapeRectangle
    * @private
    * @return {Shape} The current shape
    */
-  RectangleShape.prototype.applyPosition = function() {
+  applyPosition() {
 
-    var pos = this.computePosition( 0 );
-    var pos2 = this.computePosition( 1 );
-
-    var x, y, width, height;
+    var pos = this.computePosition( 0 ),
+      pos2 = this.computePosition( 1 ),
+      x,
+      y,
+      width,
+      height;
 
     if ( pos.x < pos2.x ) {
-      x = pos.x,
-        width = pos2.x - pos.x;
+      x = pos.x;
+      width = pos2.x - pos.x;
     } else {
-      x = pos2.x,
-        width = pos.x - pos2.x;
+      x = pos2.x;
+      width = pos.x - pos2.x;
     }
 
     if ( pos.y < pos2.y ) {
-      y = pos.y,
-        height = pos2.y - pos.y;
+      y = pos.y;
+      height = pos2.y - pos.y;
     } else {
-      y = pos2.y,
-        height = pos.y - pos2.y;
+      y = pos2.y;
+      height = pos.y - pos2.y;
     }
 
     this.currentX = x;
@@ -173,15 +174,14 @@ define( [ './graph.shape', '../graph.util' ], function( GraphShape, util ) {
     }
 
     return false;
-  };
+  }
 
   /**
    * Implements mouse move event
-   * @memberof RectangleShape
    * @private
    * @return {Shape} The current shape
    */
-  RectangleShape.prototype.handleMouseMoveImpl = function( e, deltaX, deltaY, deltaXPx, deltaYPx ) {
+  handleMouseMoveImpl( e, deltaX, deltaY, deltaXPx, deltaYPx ) {
 
     var handles = this.getProp( 'handles' );
 
@@ -197,7 +197,7 @@ define( [ './graph.shape', '../graph.util' ], function( GraphShape, util ) {
       posX = pos.x,
       posY = pos.y,
       pos2X = pos2.x,
-      pos2Y = pos2.y
+      pos2Y = pos2.y;
 
     if ( this.moving ) {
 
@@ -272,15 +272,14 @@ define( [ './graph.shape', '../graph.util' ], function( GraphShape, util ) {
 
     return true;
 
-  };
+  }
 
   /**
    * Places handles properly
-   * @memberof RectangleShape
    * @private
    * @return {Shape} The current shape
    */
-  RectangleShape.prototype.setHandles = function() {
+  setHandles() {
 
     if ( this.isLocked() ||  ( !this.isSelectable() && !this._staticHandles ) ) {
       return;
@@ -338,6 +337,6 @@ define( [ './graph.shape', '../graph.util' ], function( GraphShape, util ) {
 
   }
 
-  return RectangleShape;
+}
 
-} );
+export default ShapeRectangle

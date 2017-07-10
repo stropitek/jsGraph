@@ -1,11 +1,12 @@
-define( [ './graph.shape.line' ], function( GraphLine ) {
+define( [ '../graph.util', './graph.shape.line' ], function( util, GraphLine ) {
 
   "use strict";
-  var GraphPeakInterval = function( graph ) {
+
+  function GraphPeakInterval( graph ) {
 
   }
 
-  $.extend( GraphPeakInterval.prototype, GraphLine.prototype, {
+  util.extend( GraphPeakInterval.prototype, GraphLine.prototype, {
     createDom: function() {
       this._dom = document.createElementNS( this.graph.ns, 'line' );
       this._dom.setAttribute( 'marker-end', 'url(#verticalline' + this.graph._creation + ')' );

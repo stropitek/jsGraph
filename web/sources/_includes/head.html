@@ -1,0 +1,25 @@
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="google-site-verification" content="GUF8cGrTCaQ32gdlgpBodMhEosvQA8wp8_h_IRGyLS0" />
+
+    <title>{% if page.title %}{{ page.title }}{% else %}{{ site.title }}{% endif %}</title>
+    <meta name="description" content="{{ site.description }}">
+
+    <script src="{{ "js/node-jsgraph/dist/jsgraph.js" | prepend: site.baseurl }}"></script> <!-- jsGraph should load first -->
+
+    <script src="{{ "js/jquery/dist/jquery.min.js" | prepend: site.baseurl }}"></script> <!-- jQuery should load first -->
+    
+    <!-- Place this tag in your head or just before your close body tag. -->
+    <script async defer src="https://buttons.github.io/buttons.js"></script>
+
+    <script>
+        var baseUrl = "{{ site.baseurl }}";
+    </script>
+
+    <link rel="stylesheet" href="{{ "css/main.css" | prepend: site.baseurl }}">
+    <link rel="stylesheet" href="{{ "css/theme.css" | prepend: site.baseurl }}">
+    <link rel="canonical" href="{{ page.url | replace:'index.html','' | prepend: site.baseurl | prepend: site.url }}">
+    <link href='https://fonts.googleapis.com/css?family=Source+Code+Pro' rel='stylesheet' type='text/css'>
+</head>

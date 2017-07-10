@@ -1,42 +1,39 @@
-define( [ 'jquery', './graph.plugin', '../graph.util' ], function( $, Plugin, util ) {
+import Plugin from './graph.plugin'
+import * as util from '../graph.util'
 
-  "use strict";
+/**
+ * @class PluginShape
+ * @implements Plugin
+ */
+class PluginShape extends Plugin {
 
-  /**
-   * @class PluginShape
-   * @implements Plugin
-   */
-  var PluginShape = function() {};
-
-  PluginShape.prototype = new Plugin();
+  constructor() {
+    super( ...arguments );
+  }
 
   /**
    * Init method
    * @private
-   * @memberof PluginShape
    */
-  PluginShape.prototype.init = function( graph, options ) {
+  init( graph, options ) {
 
-    this.options = options;
     this.graph = graph;
     this.shapeType = options.type;
 
-  };
+  }
 
   /**
    * Sets the shape that is created by the plugin
    * @param {String} shapeType - The type of the shape
-   * @memberof PluginShape
    */
-  PluginShape.prototype.setShape = function( shapeType ) {
+  setShape( shapeType ) {
     this.shapeInfo.shapeType = shapeType;
-  };
+  }
 
   /**
    * @private
-   * @memberof PluginShape
    */
-  PluginShape.prototype.onMouseDown = function( graph, x, y, e, target ) {
+  onMouseDown( graph, x, y, e, target ) {
 
     if ( !this.shapeType && !this.options.url ) {
       return;
@@ -77,13 +74,15 @@ define( [ 'jquery', './graph.plugin', '../graph.util' ], function( $, Plugin, ut
 
     util.extend( true, shapeInfo, this.options );
 
-    this.emit( "beforeNewShape", shapeInfo );
+    this.emit( "beforeNewShape", shapeInfo, e );
 
     if ( this.graph.prevent( false ) ) {
       return;
     }
 
     var shape = graph.newShape( shapeInfo.type, shapeInfo );
+
+    this.emit( "createdShape", shape, e );
 
     if ( shape ) {
       self.currentShape = shape;
@@ -93,16 +92,14 @@ define( [ 'jquery', './graph.plugin', '../graph.util' ], function( $, Plugin, ut
     graph.once( "mouseUp", function() {
       self.emit( "newShape", shape );
     } )
-  };
+  }
 
   /**
    * @private
-   * @memberof PluginShape
    */
-  PluginShape.prototype.onMouseMove = function( graph, x, y, e ) {
+  onMouseMove( graph, x, y, e ) {
 
     var self = this;
-
     if ( self.currentShape ) {
 
       self.count++;
@@ -129,13 +126,12 @@ define( [ 'jquery', './graph.plugin', '../graph.util' ], function( $, Plugin, ut
       shape.handleSelected = 1;
       shape.handleMouseMove( e, true );
     }
-  };
+  }
 
   /**
    * @private
-   * @memberof PluginShape
    */
-  PluginShape.prototype.onMouseUp = function() {
+  onMouseUp() {
 
     var self = this;
     if ( self.currentShape ) {
@@ -145,6 +141,6 @@ define( [ 'jquery', './graph.plugin', '../graph.util' ], function( $, Plugin, ut
     }
   }
 
-  return PluginShape;
+}
 
-} );
+export default PluginShape

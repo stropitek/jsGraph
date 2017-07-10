@@ -1,23 +1,57 @@
-define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.mixin.errorbars' ], function( SerieLineNonInstanciable, SlotOptimizer, util, ErrorBarMixin ) {
+import Graph from '../graph.core'
+import Serie from './graph.serie'
+import SlotOptimizer from './slotoptimizer'
+import * as util from '../graph.util'
+import ErrorBarMixin from '../mixins/graph.mixin.errorbars'
 
-  "use strict";
+/**
+ * @name SerieLineDefaultOptions
+ * @object
+ * @static
+ * @memberof SerieLine
+ */
+const defaults = {
 
-  /** 
-   * Serie line
-   * @class SerieLine
-   * @example graph.newSerie( name, options, "line" );
-   * @see Graph#newSerie
-   * @augments Serie
-   */
-  var SerieLine = function() {}
+  lineColor: 'black',
+  lineStyle: 1,
+  flip: false,
+  label: "",
+  lineWidth: 1,
 
-  SerieLine.prototype = new SerieLineNonInstanciable();
+  markers: false,
+  trackMouse: false,
+  trackMouseLabel: false,
+  trackMouseLabelRouding: 1,
+  lineToZero: false,
+
+  autoPeakPicking: false,
+  autoPeakPickingNb: 4,
+  autoPeakPickingMinDistance: 10,
+  autoPeakPickingFormat: false,
+  autoPeakPickingAllowAllY: false,
+
+  selectableOnClick: true,
+
+  markersIndependant: false
+}
+
+/** 
+ * Serie line
+ * @example graph.newSerie( name, options, "line" );
+ * @see Graph#newSerie
+ * @extends Serie
+ */
+class SerieLine extends Serie {
+
+  constructor() {
+    super( ...arguments );
+  }
 
   /**
    * Initializes the serie
    * @memberof SerieLine
    */
-  SerieLine.prototype.init = function( graph, name, options ) {
+  init( graph, name, options ) {
 
     var self = this;
 
@@ -27,7 +61,7 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     this.graph = graph;
     this.name = name;
 
-    this.options = $.extend( true, {}, SerieLine.prototype.defaults, ( options || {} ) ); // Creates options
+    this.options = util.extend( true, {}, defaults, ( options || {} ) ); // Creates options
     util.mapEventEmission( this.options, this ); // Register events
 
     // Creates an empty style variable
@@ -37,6 +71,7 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     this.styles.unselected = {
       lineColor: this.options.lineColor,
       lineStyle: this.options.lineStyle,
+      lineWidth: this.options.lineWidth,
       markers: this.options.markers
     };
 
@@ -45,10 +80,7 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     };
 
     this.extendStyles();
-
-    if ( this.options.markers ) {
-      this.setMarkers( this.options.markers, "unselected" );
-    }
+    this.markersDom = new Map();
 
     this.shown = true;
 
@@ -87,6 +119,8 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     this.markerHovered = 0;
     this.groupMarkerSelected = document.createElementNS( this.graph.ns, 'g' );
 
+    this.markerPoints = {};
+
     //this.scale = 1;
     //this.shift = 0;
     this.lines = [];
@@ -98,6 +132,9 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     this.groupMain.appendChild( this.groupMarkerSelected );
     this.groupMain.appendChild( this.markerLabelSquare );
     this.groupMain.appendChild( this.markerLabel );
+
+    this.groupMarkers = document.createElementNS( this.graph.ns, 'g' );
+    this.groupMain.appendChild( this.groupMarkers );
 
     this.independantMarkers = [];
 
@@ -153,49 +190,22 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
       }
     } );
 
-  };
+    if ( this.options.markers ) {
+      this.setMarkers( this.options.markers, "unselected" );
+    }
+
+  }
 
   /**
-   * @name SerieLineDefaultOptions
-   * @object
-   * @static
-   * @memberof SerieLine
-   */
-  SerieLine.prototype.defaults = {
-
-    lineColor: 'black',
-    lineStyle: 1,
-    flip: false,
-    label: "",
-    lineWidth: 1,
-
-    markers: false,
-    trackMouse: false,
-    trackMouseLabel: false,
-    trackMouseLabelRouding: 1,
-    lineToZero: false,
-
-    autoPeakPicking: false,
-    autoPeakPickingNb: 4,
-    autoPeakPickingMinDistance: 10,
-    autoPeakPickingFormat: false,
-    autoPeakPickingAllowAllY: false,
-
-    selectableOnClick: true,
-
-    markersIndependant: false
-  };
-
-  /**
-   * Sets the options of the serie
-   * @see SerieLineDefaultOptions
-   * @param {Object} options - A object containing the options to set
-   * @return {SerieLine} The current serie
-   * @memberof SerieLine
-   
-*/
-  SerieLine.prototype.setOptions = function( options ) {
-    this.options = $.extend( true, {}, SerieLine.prototype.defaults, ( options || {} ) );
+     * Sets the options of the serie
+     * @see SerieLineDefaultOptions
+     * @param {Object} options - A object containing the options to set
+     * @return {SerieLine} The current serie
+     * @memberof SerieLine
+     
+  */
+  setOptions( options ) {
+    this.options = util.extend( true, {}, SerieLine.prototype.defaults, ( options || {} ) );
     // Unselected style
     this.styles.unselected = {
       lineColor: this.options.lineColor,
@@ -205,18 +215,18 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
 
     this.applyLineStyles();
     return this;
-  };
+  }
 
-  SerieLine.prototype.calculateSlots = function() {
+  calculateSlots() {
 
     var self = this;
     this.slotsData = {};
     for ( var i = 0, l = this.slots.length; i < l; i++ ) {
       this.calculateSlot( this.slots[ i ], i );
     }
-  };
+  }
 
-  SerieLine.prototype.slotCalculator = function( slot, slotNumber ) {
+  slotCalculator( slot, slotNumber ) {
 
     return SlotOptimizer( {
 
@@ -229,33 +239,33 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
 
     } );
 
-  };
+  }
 
-  SerieLine.prototype.calculateSlot = function( slot, slotNumber ) {
+  calculateSlot( slot, slotNumber ) {
     var self = this;
     this.slotsData[ slot ] = this.slotCalculator( slot, slotNumber );
-    this.slotsData[ slot ].pipe( function( data ) {
+    this.slotsData[ slot ].then( function( data ) {
 
       self.slotsData[ slot ] = data;
       return data;
     } );
-  };
+  }
 
-  SerieLine.prototype.onMouseOverMarker = function( e, index ) {
+  onMouseOverMarker( e, index ) {
 
     var toggledOn = this.toggleMarker( index, true, true );
     if ( this.options.onMouseOverMarker ) {
 
       this.options.onMouseOverMarker( index, this.infos ? ( this.infos[ index[ 0 ] ] ||  false ) : false, [ this.data[ index[ 1 ] ][ index[ 0 ] * 2 ], this.data[ index[ 1 ] ][ index[ 0 ] * 2 + 1 ] ] );
     }
-  };
+  }
 
-  SerieLine.prototype.onMouseOutMarker = function( e, index ) {
+  onMouseOutMarker( e, index ) {
     this.markersOffHover();
     if ( this.options.onMouseOutMarker ) {
       this.options.onMouseOutMarker( index, this.infos ? ( this.infos[ index[ 0 ] ] ||  false ) : false, [ this.data[ index[ 1 ] ][ index[ 0 ] * 2 ], this.data[ index[ 1 ] ][ index[ 0 ] * 2 + 1 ] ] );
     }
-  };
+  }
 
   /**
    * Selects one of the markers of the serie
@@ -265,7 +275,7 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
    * @returns {Boolean} The new state of the marker
    * @memberof SerieLine
    */
-  SerieLine.prototype.toggleMarker = function( index, force, hover ) {
+  toggleMarker( index, force, hover ) {
 
     var i = index[ 0 ],
       k = index[ 1 ] || 0;
@@ -330,35 +340,35 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     }
 
     return _on;
-  };
+  }
 
   /**
    * Toggles off markers that have the hover mode "on"
    * @returns {SerieLine} The current serie
    * @memberof SerieLine
    */
-  SerieLine.prototype.markersOffHover = function() {
+  markersOffHover() {
 
     for ( var i in this.domMarkerHover ) {
       this.toggleMarker( i.split( ',' ), false, true );
     }
     return this;
-  };
+  }
 
   /**
    * Toggles off markers that have the select mode "on"
    * @returns {SerieLine} The current serie
    * @memberof SerieLine
    */
-  SerieLine.prototype.markersOffSelect = function() {
+  markersOffSelect() {
 
     for ( var i in this.domMarkerSelect ) {
       this.toggleMarker( i.split( ',' ), false, false );
     }
     return this;
-  };
+  }
 
-  SerieLine.prototype.onClickOnMarker = function( e, index ) {
+  onClickOnMarker( e, index ) {
 
     var toggledOn = this.toggleMarker( index );
 
@@ -373,23 +383,23 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     if ( this.options.onToggleMarker ) {
       this.options.onToggleMarker( index, this.infos ? ( this.infos[ index[ 0 ] ] ||  false ) : false, toggledOn );
     }
-  };
+  }
 
-  SerieLine.prototype._getMarkerIndexFromEvent = function( e ) {
+  _getMarkerIndexFromEvent( e ) {
     var px = this.graph._getXY( e );
 
     //  return this.searchIndexByPxXY( ( px.x ), ( px.y ) );
     return this.searchIndexByPxXY( ( px.x - this.graph.getPaddingLeft() ), ( px.y - this.graph.getPaddingTop() ) );
-  };
+  }
 
-  SerieLine.prototype.onMouseWheel = function() {};
+  onMouseWheel() {}
 
   /**
    * Cleans the DOM from the serie internal object (serie and markers). Mostly used internally when a new {@link Serie#setData} is called
    * @returns {SerieLine} The current serie
    * @memberof SerieLine
    */
-  SerieLine.prototype.empty = function() {
+  empty() {
 
     for ( var i = 0, l = this.lines.length; i < l; i++ ) {
       this.groupLines.removeChild( this.lines[ i ] );
@@ -397,7 +407,7 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     this.lines = [];
 
     return this;
-  };
+  }
 
   /**
    * Applies a selection to the serie
@@ -406,16 +416,16 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
    * @see SerieLine#unselect
    * @memberof SerieLine
    */
-  SerieLine.prototype.select = function( selectionType ) {
+  select( selectionType ) {
 
     selectionType = selectionType ||  "selected";
 
     this.selected = selectionType !== "unselected";
 
-    if ( !( !this.areMarkersShown() && !this.areMarkersShown( selectionType ) ) ) {
+    if ( this.areMarkersShown() || this.areMarkersShown( selectionType ) ) {
       this.selectionType = selectionType;
 
-      this.draw(); // Drawing is absolutely required here
+      this.draw( true ); // Drawing is absolutely required here
       this.applyLineStyles();
     } else {
       this.selectionType = selectionType;
@@ -424,7 +434,7 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
 
     this.applyLineStyle( this.getSymbolForLegend() );
     return this;
-  };
+  }
 
   /**
    * Removes the selection to the serie. Effectively, calls {@link SerieLine#select}("unselected").
@@ -432,11 +442,11 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
    * @see SerieLine#select
    * @memberof SerieLine
    */
-  SerieLine.prototype.unselect = function() {
+  unselect() {
 
     this.selected = false;
     return this.select( "unselected" );
-  };
+  }
 
   /**
    * Degrades the data of the serie. This option is used for big data sets that have monotoneously increasing (or decreasing) x values.
@@ -449,9 +459,9 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
    * zone.setLineColor('red');
    * @memberof SerieLine
    */
-  SerieLine.prototype.degrade = function( pxPerP, options ) {
+  degrade( pxPerP, options ) {
 
-    var serie = this.graph.newSerie( this.name + "_degraded", options, 'zone' );
+    var serie = this.graph.newSerie( this.name + "_degraded", options, Graph.SERIE_ZONE );
 
     this.degradationPx = pxPerP;
 
@@ -467,9 +477,9 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     this.degradationSerie = serie;
 
     return serie;
-  };
+  }
 
-  SerieLine.prototype.drawInit = function() {
+  drawInit() {
 
     var data, xData;
 
@@ -521,14 +531,14 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     this.detectedPeaks = [];
     this.lastYPeakPicking = false;
 
-  };
+  }
 
-  SerieLine.prototype.removeLinesGroup = function() {
+  removeLinesGroup() {
     this._afterLinesGroup = this.groupLines.nextSibling;
     this.groupMain.removeChild( this.groupLines );
-  };
+  }
 
-  SerieLine.prototype.insertLinesGroup = function() {
+  insertLinesGroup() {
 
     if ( !this._afterLinesGroup ) {
       throw "Could not find group after lines to insertion."
@@ -536,9 +546,9 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
 
     this.groupMain.insertBefore( this.groupLines, this._afterLinesGroup );
     this._afterLinesGroup = false;
-  };
+  }
 
-  SerieLine.prototype.removeExtraLines = function() {
+  removeExtraLines() {
 
     var i = this.currentLineId,
       l = this.lines.length;
@@ -549,9 +559,9 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
 
     this.lines.splice( this.currentLineId, l - ( this.currentLineId ) );
     this.currentLineId = 0;
-  };
+  }
 
-  SerieLine.prototype.detectPeaks = function( x, y ) {
+  detectPeaks( x, y ) {
 
     if ( !this.options.autoPeakPicking ) {
       return;
@@ -592,13 +602,13 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     } else {
       this.detectedPeaks.push( [ y, x ] );
     }
-  };
+  }
 
   /**
    * Draws the serie
    * @memberof SerieLine
    */
-  SerieLine.prototype.draw = function( force ) { // Serie redrawing
+  draw( force ) { // Serie redrawing
 
     if ( force || this.hasDataChanged() ) {
       this.drawInit();
@@ -655,9 +665,11 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     if ( this.hasStyleChanged( this.selectionType ) ) {
       this.updateStyle();
     }
-  };
 
-  SerieLine.prototype._draw_standard = function() {
+    this.dataHasChanged( false );
+  }
+
+  _draw_standard() {
 
     var self = this,
       data = this._dataToUse,
@@ -678,12 +690,21 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
       xpx2,
       ypx2,
       xAxis = this.getXAxis(),
-      yAxis = this.getYAxis();
-
-    var xMin = xAxis.getCurrentMin(),
+      yAxis = this.getYAxis(),
+      xMin = xAxis.getCurrentMin(),
       yMin = yAxis.getCurrentMin(),
       xMax = xAxis.getCurrentMax(),
       yMax = yAxis.getCurrentMax();
+
+    // Y crossing
+    var yLeftCrossingRatio,
+      yLeftCrossing,
+      yRightCrossingRatio,
+      yRightCrossing,
+      xTopCrossingRatio,
+      xTopCrossing,
+      xBottomCrossingRatio,
+      xBottomCrossing;
 
     var incrXFlip = 0;
     var incrYFlip = 1;
@@ -691,39 +712,48 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     var pointOutside = false;
     var lastPointOutside = false;
     var pointOnAxis;
+
     if ( this.isFlipped() ) {
       incrXFlip = 1;
       incrYFlip = 0;
     }
 
-    for ( ; i < l; i++ ) {
+    for ( i = 0; i < l; i++ ) {
 
       toBreak = false;
       this.counter1 = i;
 
       this.currentLine = "";
-      j = 0, k = 0, m = data[ i ].length;
+      j = 0;
+      k = 0;
+      m = data[ i ].length;
 
-      for ( ; j < m; j += 2 ) {
-
-        this.counter2 = j / 2;
-
-        if ( this.markersShown() ) {
-
-          this.getMarkerCurrentFamily( this.counter2 );
-        }
+      for ( j = 0; j < m; j += 2 ) {
 
         x = data[ i ][ j + incrXFlip ];
         y = data[ i ][ j + incrYFlip ];
 
+        if ( ( x < xMin && lastX < xMin ) || ( x > xMax && lastX > xMax ) || ( ( ( y < yMin && lastY < yMin ) || ( y > yMax && lastY > yMax ) ) && !this.options.lineToZero ) ) {
+          lastX = x;
+          lastY = y;
+          lastPointOutside = true;
+          continue;
+        }
+
+        this.counter2 = j / 2;
+
+        if ( this.markersShown() ) {
+          this.getMarkerCurrentFamily( this.counter2 );
+        }
+
         xpx2 = this.getX( x );
         ypx2 = this.getY( y );
-
-        pointOutside = ( x < xMin || y < yMin || x > xMax ||  y > yMax );
 
         if ( xpx2 == xpx && ypx2 == ypx ) {
           continue;
         }
+
+        pointOutside = ( x < xMin || y < yMin || x > xMax ||  y > yMax );
 
         if ( this.options.lineToZero ) {
           pointOutside = ( x < xMin || x > xMax );
@@ -746,30 +776,30 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
 
               pointOnAxis = [];
               // Y crossing
-              var yLeftCrossingRatio = ( x - xMin ) / ( x - lastX );
-              var yLeftCrossing = ( yLeftCrossingRatio < 1 && yLeftCrossingRatio > 0 ) ? y - yLeftCrossingRatio * ( y - lastY ) : false;
-              var yRightCrossingRatio = ( x - xMax ) / ( x - lastX );
-              var yRightCrossing = ( yRightCrossingRatio < 1 && yRightCrossingRatio > 0 ) ? y - yRightCrossingRatio * ( y - lastY ) : false;
+              yLeftCrossingRatio = ( x - xMin ) / ( x - lastX );
+              yLeftCrossing = y - yLeftCrossingRatio * ( y - lastY );
+              yRightCrossingRatio = ( x - xMax ) / ( x - lastX );
+              yRightCrossing = y - yRightCrossingRatio * ( y - lastY );
 
               // X crossing
-              var xTopCrossingRatio = ( y - yMin ) / ( y - lastY );
-              var xTopCrossing = ( xTopCrossingRatio < 1 && xTopCrossingRatio > 0 ) ? x - xTopCrossingRatio * ( x - lastX ) : false;
-              var xBottomCrossingRatio = ( y - yMax ) / ( y - lastY );
-              var xBottomCrossing = ( xBottomCrossingRatio < 1 && xBottomCrossingRatio > 0 ) ? x - xBottomCrossingRatio * ( x - lastX ) : false;
+              xTopCrossingRatio = ( y - yMin ) / ( y - lastY );
+              xTopCrossing = x - xTopCrossingRatio * ( x - lastX );
+              xBottomCrossingRatio = ( y - yMax ) / ( y - lastY );
+              xBottomCrossing = x - xBottomCrossingRatio * ( x - lastX );
 
-              if ( yLeftCrossing !== false && yLeftCrossing < yMax && yLeftCrossing > yMin ) {
+              if ( yLeftCrossingRatio < 1 && yLeftCrossingRatio > 0 && yLeftCrossing !== false && yLeftCrossing < yMax && yLeftCrossing > yMin ) {
                 pointOnAxis.push( [ xMin, yLeftCrossing ] );
               }
 
-              if ( yRightCrossing !== false && yRightCrossing < yMax && yRightCrossing > yMin ) {
+              if ( yRightCrossingRatio < 1 && yRightCrossingRatio > 0 && yRightCrossing !== false && yRightCrossing < yMax && yRightCrossing > yMin ) {
                 pointOnAxis.push( [ xMax, yRightCrossing ] );
               }
 
-              if ( xTopCrossing !== false && xTopCrossing < xMax && xTopCrossing > xMin ) {
+              if ( xTopCrossingRatio < 1 && xTopCrossingRatio > 0 && xTopCrossing !== false && xTopCrossing < xMax && xTopCrossing > xMin ) {
                 pointOnAxis.push( [ xTopCrossing, yMin ] );
               }
 
-              if ( xBottomCrossing !== false && xBottomCrossing < xMax && xBottomCrossing > xMin ) {
+              if ( xBottomCrossingRatio < 1 && xBottomCrossingRatio > 0 && xBottomCrossing !== false && xBottomCrossing < xMax && xBottomCrossing > xMin ) {
                 pointOnAxis.push( [ xBottomCrossing, yMax ] );
               }
 
@@ -784,7 +814,7 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
 
                   this._createLine();
                   this._addPoint( this.getX( pointOnAxis[ 0 ][ 0 ] ), this.getY( pointOnAxis[ 0 ][ 1 ] ), pointOnAxis[ 0 ][ 0 ], pointOnAxis[ 0 ][ 1 ], false, false, false );
-                  this._addPoint( xpx2, ypx2, lastX, lastY, false, false, false );
+                  this._addPoint( xpx2, ypx2, lastX, lastY, false, false, true );
 
                 } else if ( !lastPointOutside ) { // We were inside and now go outside
 
@@ -800,6 +830,7 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
                   // No crossing: do nothing
                   if ( pointOnAxis.length == 2 ) {
                     this._createLine();
+
                     this._addPoint( this.getX( pointOnAxis[ 0 ][ 0 ] ), this.getY( pointOnAxis[ 0 ][ 1 ] ), pointOnAxis[ 0 ][ 0 ], pointOnAxis[ 0 ][ 1 ], false, false, false );
                     this._addPoint( this.getX( pointOnAxis[ 1 ][ 0 ] ), this.getY( pointOnAxis[ 1 ][ 1 ] ), pointOnAxis[ 0 ][ 0 ], pointOnAxis[ 0 ][ 1 ], false, false, false );
                   }
@@ -884,7 +915,7 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     if ( this._tracker ) {
 
       if ( this._trackerDom ) {
-        this.groupLines.removeChild( this._trackerDom );
+        this._trackerDom.remove();
       }
 
       var cloned = this.groupLines.cloneNode( true );
@@ -899,21 +930,21 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
 
       self._trackerDom = cloned;
 
-      cloned.addEventListener( "mousemove", function( e ) {
+      self.groupMain.addEventListener( "mousemove", function( e ) {
         var coords = self.graph._getXY( e ),
           ret = self.handleMouseMove( false, false );
         self._trackingCallback( self, ret, coords.x, coords.y );
       } );
 
-      cloned.addEventListener( "mouseleave", function( e ) {
+      self.groupMain.addEventListener( "mouseleave", function( e ) {
         self._trackingOutCallback( self );
       } );
     }
     return this;
 
-  };
+  }
 
-  SerieLine.prototype._draw_slot = function() {
+  _draw_slot() {
 
     var self = this;
     if ( this._slotToUse ) {
@@ -934,9 +965,9 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     }
 
     return false;
-  };
+  }
 
-  SerieLine.prototype._draw_equally_separated = function() {
+  _draw_equally_separated() {
 
     var i = 0,
       data = this._dataToUse,
@@ -955,7 +986,9 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     for ( ; i < l; i++ ) {
 
       currentLine = "M ";
-      j = 0, k = 0, m = data[ i ].length;
+      j = 0;
+      k = 0;
+      m = data[ i ].length;
 
       this.counter1 = i;
 
@@ -1010,9 +1043,9 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
       }
     }
 
-  };
+  }
 
-  SerieLine.prototype._optimize_before = function( xpx, ypx ) {
+  _optimize_before( xpx, ypx ) {
 
     if ( !this._optimizeMonotoneous ) {
       return true;
@@ -1034,9 +1067,9 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     }
 
     return true;
-  };
+  }
 
-  SerieLine.prototype._optimize_after = function( xpx, ypx ) {
+  _optimize_after( xpx, ypx ) {
 
     if ( !this._optimizeMonotoneous ) {
       return true;
@@ -1048,65 +1081,83 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     }
 
     return true;
-  };
+  }
 
   /**
    * Hides the automatic peak picking (see the autoPeakPicking option)
    * @memberof SerieLine
    */
-  SerieLine.prototype.hidePeakPicking = function( lock ) {
+  hidePeakPicking( lock ) {
 
     if ( !this._hidePeakPickingLocked ) {
       this._hidePeakPickingLocked = lock;
     }
 
     hidePeakPicking( this );
-  };
+  }
 
   /**
    * Shows the automatic peak picking (see the autoPeakPicking option)
    * @memberof SerieLine
    */
-  SerieLine.prototype.showPeakPicking = function( unlock ) {
+  showPeakPicking( unlock ) {
 
     if ( this._hidePeakPickingLocked && !unlock ) {
       return;
     }
 
     showPeakPicking( this );
-  };
+  }
+
+  killPeakPicking() {
+
+    if ( this.picks ) {
+      for ( var i = 0, l = this.picks.length; i < l; i++ ) {
+        this.picks[ i ].kill();
+      }
+    }
+  }
+
+  kill() {
+    super.kill();
+    this.killPeakPicking();
+  }
 
   /**
    * @param {Number} k - Index of the point for which we should get the family
    * @memberof SerieLine
    */
-  SerieLine.prototype.getMarkerCurrentFamily = function( k ) {
+  getMarkerCurrentFamily( k ) {
 
-    if ( !this.markerPoints[ this.selectionType ] ) {
+    if ( !this.markerPoints || !this.markerPoints[ this.selectionType ] ) {
       return;
     }
+
+    var family;
 
     for ( var z = 0; z < this.markerPoints[ this.selectionType ].length; z++ ) {
       if ( this.markerPoints[ this.selectionType ][ z ][ 0 ] <= k )  { // This one is a possibility !
         if ( this.markerPoints[ this.selectionType ][ z ][ 1 ] >= k ) { // Verify that it's in the boundary
           this.markerCurrentFamily = this.markerPoints[ this.selectionType ][ z ][ 2 ];
-
+          family = this.markerFamilies[ this.selectionType ][ this.markerCurrentFamily ];
         }
       } else {
         break;
       }
-
     }
 
+    if ( !family ) {
+      return false;
+    }
+    this.getMarkerDom( family );
     return this.markerCurrentFamily;
+  }
 
-  };
-
-  SerieLine.prototype.drawSlot = function( slotToUse, y ) {
+  drawSlot( slotToUse, y ) {
 
     var k = 0;
     var i = 0,
-      xpx, max;
+      xpx, ypx, max;
     var j;
 
     if ( this.isFlipped() ) {
@@ -1132,8 +1183,8 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
 
       if ( this.isFlipped() ) {
 
-        ypx = Math.floor( this.getY( slotToUse[ j ].x ) ),
-          max = this.getX( slotToUse[ j ].max );
+        ypx = Math.floor( this.getY( slotToUse[ j ].x ) );
+        max = this.getX( slotToUse[ j ].max );
 
         /*if ( this.options.autoPeakPicking ) {
             allY.push( [ slotToUse[ j ].max, slotToUse[ j ].x ] );
@@ -1148,9 +1199,8 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
         //    k++;
       } else {
 
-        xpx = Math.floor( this.getX( slotToUse[ j ].x ) ),
-
-          max = this.getY( slotToUse[ j ].max );
+        xpx = Math.floor( this.getX( slotToUse[ j ].x ) );
+        max = this.getY( slotToUse[ j ].max );
 
         if ( this.options.autoPeakPicking ) {
           allY.push( [ slotToUse[ j ].max, slotToUse[ j ].x ] );
@@ -1169,9 +1219,9 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     this._createLine();
     i++;
 
-  };
+  }
 
-  SerieLine.prototype.setMarkerStyleTo = function( dom, family ) {
+  setMarkerStyleTo( dom, family ) {
 
     if ( !dom ||  !family ) {
       console.trace();
@@ -1181,25 +1231,29 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     dom.setAttribute( 'fill', family.fillColor ||  'transparent' );
     dom.setAttribute( 'stroke', family.strokeColor || this.getLineColor() );
     dom.setAttribute( 'stroke-width', family.strokeWidth ||  1 );
-  };
+  }
 
   /**
    * Hides the tracking marker (see the trackMouse option)
    * @memberof SerieLine
    */
-  SerieLine.prototype.hideTrackingMarker = function() {
+  hideTrackingMarker() {
     this.marker.setAttribute( 'display', 'none' );
     this.markerLabel.setAttribute( 'display', 'none' );
     this.markerLabelSquare.setAttribute( 'display', 'none' );
-  };
+  }
 
-  SerieLine.prototype._addPoint = function( xpx, ypx, x, y, j, move, allowMarker ) {
+  _addPoint( xpx, ypx, x, y, j, move, allowMarker ) {
     var pos;
 
     /*if( ! this.currentLineId ) {
         throw "No current line"
       }* @memberof SerieLine
 */
+
+    if ( isNaN( xpx ) ||  isNaN( ypx ) ) {
+      return;
+    }
 
     if ( this.counter == 0 ) {
       this.currentLine = 'M ';
@@ -1236,16 +1290,23 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
       return;
     }
 
-    if ( this.markersShown() && allowMarker !== false ) {
-      drawMarkerXY( this, this.markerFamilies[ this.selectionType ][ this.markerCurrentFamily ], xpx, ypx );
+    let family;
+    if ( this.markersShown() && allowMarker !== false && ( family = this.markerFamilies[ this.selectionType || "unselected" ] ) ) {
+      drawMarkerXY(
+        this,
+        family[ this.markerCurrentFamily ],
+        xpx,
+        ypx,
+        this.markersDom.get( family[  this.markerCurrentFamily ] )
+      );
     }
 
     this.counter++;
 
-  };
+  }
 
   // Returns the DOM
-  SerieLine.prototype._createLine = function() {
+  _createLine() {
 
     var i = this.currentLineId++,
       line;
@@ -1254,6 +1315,7 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     if ( this.lines[ i ] ) {
       line = this.lines[ i ];
     } else {
+
       line = document.createElementNS( this.graph.ns, 'path' );
       this.applyLineStyle( line );
       this.groupLines.appendChild( line );
@@ -1270,24 +1332,24 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     this.counter = 0;
 
     return line;
-  };
+  }
 
   /**
    * Reapply the current style to the serie lines elements. Mostly used internally
    * @memberof SerieLine
    */
-  SerieLine.prototype.applyLineStyles = function() {
+  applyLineStyles() {
 
     for ( var i = 0; i < this.lines.length; i++ ) {
       this.applyLineStyle( this.lines[ i ] );
     }
-  };
+  }
 
   /**
    * Applies the current style to a line element. Mostly used internally
    * @memberof SerieLine
    */
-  SerieLine.prototype.applyLineStyle = function( line ) {
+  applyLineStyle( line ) {
 
     line.setAttribute( 'stroke', this.getLineColor() );
     line.setAttribute( 'stroke-width', this.getLineWidth() );
@@ -1298,7 +1360,7 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     }
     line.setAttribute( 'fill', 'none' );
     //	line.setAttribute('shape-rendering', 'optimizeSpeed');
-  };
+  }
 
   /**
    * Updates the current style (lines + legend) of the serie. Use this method if you have explicitely changed the options of the serie
@@ -1309,15 +1371,15 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
    * s.draw(); // Would also do the same thing, but recalculates the whole serie display (including (x,y) point pairs)
    * @memberof SerieLine
    */
-  SerieLine.prototype.updateStyle = function() {
+  updateStyle() {
     this.applyLineStyles();
     this.setLegendSymbolStyle();
 
     this.styleHasChanged( false );
-  };
+  }
 
   // Revised August 2014. Ok
-  SerieLine.prototype.getMarkerPath = function( family, add ) {
+  getMarkerPath( family, add ) {
 
     var z = family.zoom  ||  1,
       add = add || 0,
@@ -1364,17 +1426,21 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
 
     return el.join( " " );
 
-  };
+  }
 
   // Revised August 2014. Ok
-  SerieLine.prototype.getMarkerDom = function( family )  {
+  getMarkerDom( family )  {
 
     var self = this;
-    if ( !family.dom ) {
+
+    if ( !this.markersDom.has( family ) ) {
+
       var dom = document.createElementNS( this.graph.ns, 'path' );
       this.setMarkerStyleTo( dom, family );
-      family.dom = dom;
-      family.path = "";
+      this.markersDom.set( family, { 
+        dom: dom,
+        path: ""
+      } );
 
       dom.addEventListener( 'mouseover', function( e ) {
         var closest = self._getMarkerIndexFromEvent( e );
@@ -1394,10 +1460,10 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     }
 
     return family.dom;
-  };
+  }
 
   // In case markers are not grouped in families but independant
-  SerieLine.prototype.getMarkerDomIndependant = function( index1, index2, family ) {
+  getMarkerDomIndependant( index1, index2, family ) {
 
     var self = this;
     var index = index1 + "," + index2;
@@ -1424,10 +1490,10 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
       this.independantMarkers[ index ] = dom;
     }
 
-    this.groupMain.appendChild( this.independantMarkers[ index ] );
+    this.groupMarkers.appendChild( this.independantMarkers[ index ] );
 
     return this.independantMarkers[ index ];
-  };
+  }
 
   /**
    * Searches the closest point pair (x,y) to the a pair of pixel position
@@ -1436,7 +1502,7 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
    * @returns {Number} Index in the data array of the closest (x,y) pair to the pixel position passed in parameters
    * @memberof SerieLine
    */
-  SerieLine.prototype.searchIndexByPxXY = function( x, y ) {
+  searchIndexByPxXY( x, y ) {
 
     var oldDist = false,
       xyindex = false,
@@ -1468,8 +1534,8 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
       for ( var i = 0, l = this.data.length; i < l; i++ ) {
         for ( var k = 0, m = this.data[ i ].length; k < m; k += 2 ) {
 
-          p_x = this.data[ i ][ k ],
-            p_y = this.data[ i ][ k + 1 ];
+          p_x = this.data[ i ][ k ];
+          p_y = this.data[ i ][ k + 1 ];
           dist = Math.pow( ( this.getX( p_x ) - x ), 2 ) + Math.pow( ( this.getY( p_y ) - y ), 2 );
           if ( !oldDist || dist < oldDist ) {
             oldDist = dist;
@@ -1481,7 +1547,7 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     }
 
     return xyindex;
-  };
+  }
 
   /**
    * Performs a binary search to find the closest point index to an x value. For the binary search to work, it is important that the x values are monotoneous.
@@ -1489,7 +1555,7 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
    * @returns {Object} Index in the data array of the closest (x,y) pair to the pixel position passed in parameters
    * @memberof SerieLine
    */
-  SerieLine.prototype.searchClosestValue = function( valX ) {
+  searchClosestValue( valX ) {
 
     var xMinIndex;
 
@@ -1515,11 +1581,11 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
         xClosest: ( Math.abs( this.data[ i ][ xMinIndex + 2 ] - valX ) < Math.abs( this.data[ i ][ xMinIndex ] - valX ) ? xMinIndex + 2 : xMinIndex ) / 2
       }
     }
-  };
+  }
 
-  SerieLine.prototype.handleMouseMove = function( x, doMarker ) {
+  handleMouseMove( xValue, doMarker ) {
 
-    var valX = x || this.getXAxis().getMouseVal(),
+    var valX = xValue || this.getXAxis().getMouseVal(),
       xMinIndex,
       xMin,
       yMin,
@@ -1582,9 +1648,9 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
       xBeforeIndex: value.xBeforeIndex,
       xIndexClosest: value.xClosest
     };
-  };
+  }
 
-  SerieLine.prototype._searchBinary = function( target, haystack, reverse ) {
+  _searchBinary( target, haystack, reverse ) {
     var seedA = 0,
       length = haystack.length,
       seedB = ( length - 2 );
@@ -1623,7 +1689,7 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
           seedB = seedInt;
       }
     }
-  };
+  }
 
   /**
    * Gets the maximum value of the y values between two x values. The x values must be monotoneously increasing
@@ -1632,7 +1698,7 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
    * @returns {Number} Maximal y value in between startX and endX
    * @memberof SerieLine
    */
-  SerieLine.prototype.getMax = function( start, end ) {
+  getMax( start, end ) {
 
     var start2 = Math.min( start, end ),
       end2 = Math.max( start, end ),
@@ -1667,7 +1733,7 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     }
 
     return max;
-  };
+  }
 
   /**
    * Gets the minimum value of the y values between two x values. The x values must be monotoneously increasing
@@ -1676,7 +1742,7 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
    * @returns {Number} Maximal y value in between startX and endX
    * @memberof SerieLine
    */
-  SerieLine.prototype.getMin = function( start, end ) {
+  getMin( start, end ) {
 
     var start2 = Math.min( start, end ),
       end2 = Math.max( start, end ),
@@ -1709,34 +1775,38 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     }
 
     return min;
-  };
+  }
 
   /* LINE STYLE * @memberof SerieLine
    */
 
-  SerieLine.prototype.setStyle = function( style, selectionType ) {
-
+  setStyle( style, selectionType = "unselected" ) {
+    //console.log( style, selectionType );
     this.styles[ selectionType ] = style;
     this.styleHasChanged( selectionType );
 
-  };
+  }
 
-  SerieLine.prototype.setLineStyle = function( number, selectionType ) {
+  setLineStyle( number, selectionType = "unselected", applyToSelected ) {
 
-    selectionType = selectionType ||  "unselected";
+    selectionType = selectionType;
     this.styles[ selectionType ] = this.styles[ selectionType ] || {};
     this.styles[ selectionType ].lineStyle = number;
+
+    if ( applyToSelected ) {
+      this.setLineStyle( number, "selected" );
+    }
 
     this.styleHasChanged( selectionType );
 
     return this;
-  };
+  }
 
-  SerieLine.prototype.getLineStyle = function( selectionType ) {
+  getLineStyle( selectionType ) {
     return this.getStyle( selectionType ).lineStyle;
-  };
+  }
 
-  SerieLine.prototype.getLineDashArray = function( selectionType ) {
+  getLineDashArray( selectionType =  this.selectionType || "unselected" ) {
 
     switch ( this.getStyle( selectionType ).lineStyle ) {
 
@@ -1758,10 +1828,10 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
 
       case 6:
         return "5 2";
-        break
+        break;
       case 7:
         return "2 5";
-        break
+        break;
 
       case 8:
         return "4 2 4 4";
@@ -1782,110 +1852,134 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
         break;
 
       default:
-        return this.styles[ selectionType ||  this.selectionType || "unselected" ].lineStyle;
+        return this.styles[ selectionType ].lineStyle;
         break;
     }
 
     this.styleHasChanged( selectionType );
 
-  };
+  }
 
-  SerieLine.prototype.getStyle = function( selectionType ) {
-    return this.styles[ selectionType || this.selectionType || "unselected" ];
-  };
+  getStyle( selectionType = this.selectionType ||  "unselected" ) {
+    return this.styles[ selectionType ];
+  }
 
-  SerieLine.prototype.extendStyles = function() {
+  extendStyles() {
     for ( var i in this.styles ) {
 
       var s = this.styles[ i ];
       if ( s ) {
-        this.styles[ i ] = $.extend( true, {}, this.styles.unselected, s );
+        this.styles[ i ] = util.extend( true, {}, this.styles.unselected, s );
       }
     }
-  };
+  }
+
+  extendStyle( styleTarget, styleOrigin ) {
+    var s = this.styles[ styleTarget ];
+
+    this.styles[ styleTarget ] = util.extend( true, {}, this.styles[ styleOrigin || "unselected" ], s || {} );
+
+    this.styles[ styleTarget ].markers.map( function( marker ) {
+      if ( marker.dom ) {
+        marker.dom = "";
+      }
+    } );
+
+    this._recalculateMarkerPoints( styleTarget, this.styles[ styleTarget ].markers );
+    this.styleHasChanged( styleTarget );
+  }
+
   /*  * @memberof SerieLine
    */
 
-  SerieLine.prototype.setLineWidth = function( width, selectionType ) {
+  setLineWidth( width, selectionType, applyToSelected ) {
 
     selectionType = selectionType ||  "unselected";
     this.styles[ selectionType ] = this.styles[ selectionType ] || {};
     this.styles[ selectionType ].lineWidth = width;
 
+    if ( applyToSelected ) {
+      this.setLineWidth( width, "selected" );
+    }
+
     this.styleHasChanged( selectionType );
 
     return this;
-  };
+  }
 
-  SerieLine.prototype.getLineWidth = function( selectionType ) {
+  getLineWidth( selectionType ) {
 
-    return this.getStyle( selectionType ).lineWidth;
-  };
+    return this.getStyle( selectionType ).lineWidth || 1;
+  }
 
   /* LINE COLOR * @memberof SerieLine
    */
-  SerieLine.prototype.setLineColor = function( color, selectionType ) {
+  setLineColor( color, selectionType, applyToSelected ) {
 
     selectionType = selectionType ||  "unselected";
     this.styles[ selectionType ] = this.styles[ selectionType ] || {};
     this.styles[ selectionType ].lineColor = color;
 
+    if ( applyToSelected ) {
+      this.setLineColor( color, "selected" );
+    }
+
     this.styleHasChanged( selectionType );
 
     return this;
-  };
+  }
 
-  SerieLine.prototype.getLineColor = function( selectionType ) {
+  getLineColor( selectionType ) {
 
-    return this.getStyle( selectionType ).lineColor;
-  };
+    return this.getStyle( selectionType ).lineColor || "black";
+  }
 
   /* * @memberof SerieLine
    */
 
   /* MARKERS * @memberof SerieLine
    */
-  SerieLine.prototype.showMarkers = function( selectionType, redraw ) {
+  showMarkers( selectionType, redraw ) {
     selectionType = selectionType ||  "unselected";
     this.styles[ selectionType ] = this.styles[ selectionType ] || {};
     this.styles[ selectionType ].showMarkers = true;
 
     if ( redraw && this._drawn ) {
-      this.draw();
+      this.draw( true );
     } else {
       this.styleHasChanged( selectionType );
     }
 
     return this;
-  };
+  }
 
-  SerieLine.prototype.hideMarkers = function( selectionType, redraw ) {
+  hideMarkers( selectionType, redraw ) {
 
     selectionType = selectionType ||  "unselected";
     this.styles[ selectionType ].showMarkers = false;
 
     if ( redraw && this._drawn ) {
-      this.draw();
+      this.draw( true );
     } else {
       this.styleHasChanged( selectionType );
     }
     return this;
-  };
+  }
 
-  SerieLine.prototype.markersShown = function( selectionType ) {
-    return this.getStyle( selectionType ).showMarkers;
-  };
+  markersShown( selectionType ) {
+    return this.getStyle( selectionType ).showMarkers !== false;
+  }
 
-  SerieLine.prototype.areMarkersShown = function() {
+  areMarkersShown() {
     return this.markersShown.apply( this, arguments );
-  };
+  }
 
-  SerieLine.prototype.isMarkersShown = function() {
+  isMarkersShown() {
     return this.markersShown.apply( this, arguments );
-  };
+  }
 
   // Multiple markers
-  SerieLine.prototype.setMarkers = function( families, selectionType ) {
+  setMarkers( families, selectionType, applyToSelected ) {
     // Family has to be an object
     // Family looks like
     /*
@@ -1893,8 +1987,9 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
 					type: 1,
 					zoom: 1,
 					strokeWidth: 1,
-					strokeColor: ''
+					strokeColor: '',
 					fillColor: '',
+          points: []
 				}
 			* @memberof SerieLine
 */
@@ -1916,15 +2011,45 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
 
     this.styles[ selectionType || "unselected" ].markers = families;
 
-    this._recalculateMarkerPoints( selectionType, families );
+    if ( applyToSelected ) {
+      this.styles[ "selected" ].markers = util.extend( true, {}, families );
+    }
 
+    this._recalculateMarkerPoints( selectionType, families );
     this.styleHasChanged( selectionType );
     this.dataHasChanged( true ); // Data has not really changed, but marker placing is performed during the draw method
-
     return this;
-  };
+  }
 
-  SerieLine.prototype.setMarkersPoints = function( points, family, selectionType ) {
+  setMarkersPoints( points, family, selectionType ) {
+    this._extendMarkers( "points", points, family, selectionType, true );
+  }
+
+  setMarkersColor( color, family, selectionType ) {
+    this._extendMarkers( "color", color, family, selectionType );
+  }
+
+  setMarkersType( type, family, selectionType ) {
+    this._extendMarkers( "type", type, family, selectionType );
+  }
+
+  setMarkersZoom( zoom, family, selectionType ) {
+    this._extendMarkers( "zoom", zoom, family, selectionType );
+  }
+
+  setMarkersStrokeColor( strokeColor, family, selectionType ) {
+    this._extendMarkers( "strokeColor", strokeColor, family, selectionType );
+  }
+
+  setMarkersStrokeWidth( strokeWidth, family, selectionType ) {
+    this._extendMarkers( "strokeWidth", strokeWidth, family, selectionType );
+  }
+
+  setMarkersFillColor( fillColor, family, selectionType ) {
+    this._extendMarkers( "fillColor", fillColor, family, selectionType );
+  }
+
+  _extendMarkers( type, value, family, selectionType, recalculatePoints ) {
 
     family = family ||  0;
     selectionType = selectionType ||  "unselected";
@@ -1933,11 +2058,21 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
       return;
     }
 
-    this.styles[ selectionType ].markers[ family ].points = points;
-    this._recalculateMarkerPoints( selectionType, this.styles[ selectionType ].markers );
+    this.styles[ selectionType ].markers[ family ][ type ] = value
+
+    if ( recalculatePoints ) {
+      this._recalculateMarkerPoints( selectionType, this.styles[ selectionType ].markers );
+    }
+
+    if ( !this.markersDom[ this.styles[ selectionType ].markers[ family ] ] ) { // DOM doesn't exist yet.
+      return;
+    }
+
+    this.setMarkerStyleTo( this.markersDom[ this.styles[ selectionType ].markers[ family ] ].dom, this.styles[ selectionType ].markers[ family ] );
+
   }
 
-  SerieLine.prototype._recalculateMarkerPoints = function( selectionType, families ) {
+  _recalculateMarkerPoints( selectionType, families ) {
 
     var markerPoints = [];
     // Overwriting any other undefined families
@@ -1945,7 +2080,6 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
 
     for ( var i = 0, k = families.length; i < k; i++ ) {
 
-      this.getMarkerDom( families[ i ] );
       families[ i ].markerPath = this.getMarkerPath( families[ i ] );
 
       if ( !families[ i ].points ) {
@@ -1974,7 +2108,6 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
       }
     }
 
-    this.markerFamilies = this.markerFamilies || {};
     this.markerFamilies[ selectionType || "unselected" ] = families;
 
     // Let's sort if by the first index.
@@ -1982,24 +2115,37 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
       return ( a[ 0 ] - b[ 0 ] ) ||  ( a[ 2 ] == null ? -1 : 1 );
     } );
 
-    this.markerPoints = this.markerPoints || {}; // By default, markerPoints doesn't exist, to optimize the cases without markers
     this.markerPoints[ selectionType || "unselected" ] = markerPoints;
   }
 
-  SerieLine.prototype.insertMarkers = function( selectionType ) {
+  insertMarkers( selectionType ) {
 
     if ( !this.markerFamilies || !this.markerFamilies[ selectionType || this.selectionType ] || this.options.markersIndependant ) {
       return;
     }
 
     for ( var i = 0, l = this.markerFamilies[ selectionType || this.selectionType ].length; i < l; i++ ) {
-      this.markerFamilies[ selectionType || this.selectionType ][ i ].dom.setAttribute( 'd', this.markerFamilies[ selectionType || this.selectionType ][ i ].path );
-      this.groupMain.appendChild( this.markerFamilies[ selectionType || this.selectionType ][ i ].dom );
+
+      if ( !this.markersDom.has( this.markerFamilies[ selectionType || this.selectionType ][ i ] ) ) {
+        continue;
+      }
+
+      let dom =
+        this
+        .markersDom
+        .get(  this.markerFamilies[ selectionType || this.selectionType ][ i ] );
+
+      dom.dom
+        .setAttribute(
+          'd',
+          dom.path );
+
+      this.groupMarkers.appendChild( dom.dom );
       this.currentMarkersSelectionType = this.selectionType;
     }
-  };
+  }
 
-  SerieLine.prototype.getMarkerForLegend = function() {
+  getMarkerForLegend() {
 
     if ( !this.markerPoints || !this.markerPoints[ this.selectionType ] ) {
       return;
@@ -2016,55 +2162,64 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
     }
 
     return this.markerForLegend;
-  };
+  }
 
-  SerieLine.prototype.eraseMarkers = function() {
+  eraseMarkers() {
 
     var self = this;
 
     if ( this.options.markersIndependant ) {
 
       for ( var i in this.independantMarkers ) {
-        self.groupMain.removeChild( this.independantMarkers[ i ] );
+        self.groupMarkers.removeChild( this.independantMarkers[ i ] );
       }
 
       this.independantMarkers = {};
 
     } else if ( this.currentMarkersSelectionType ) {
 
-      this.markerFamilies[ this.currentMarkersSelectionType ].map( function( el ) {
-        self.groupMain.removeChild( el.dom );
+      this.markersDom.forEach( function( el ) {
+
+        if ( !el.dom ) {
+          return;
+        }
+
+        if ( el.dom.parentNode !== self.groupMarkers ) {
+          return;
+        }
+
+        self.groupMarkers.removeChild( el.dom );
         el.path = "";
       } );
 
       this.currentMarkersSelectionType = false;
     }
 
-  };
+  }
 
-  SerieLine.prototype.showImpl = function() {
+  showImpl() {
     this.showPeakPicking();
-  };
+  }
 
-  SerieLine.prototype.hideImpl = function() {
+  hideImpl() {
     this.hidePeakPicking();
-  };
+  }
 
-  SerieLine.prototype.XIsMonotoneous = function() {
+  XIsMonotoneous() {
     this.xmonotoneous = true;
     return this;
-  };
+  }
 
-  SerieLine.prototype.isXMonotoneous = function() {
+  isXMonotoneous() {
     return this.xmonotoneous ||  false;
-  };
+  }
 
-  SerieLine.prototype.XMonotoneousDirection = function() {
+  XMonotoneousDirection() {
 
     return this.data && this.data[ 0 ] && ( this.data[ 0 ][ 2 ] - this.data[ 0 ][ 0 ] ) > 0;
-  };
+  }
 
-  SerieLine.prototype.makePeakPicking = function() {
+  makePeakPicking() {
 
     var self = this;
     var ys = this.detectedPeaks;
@@ -2090,10 +2245,10 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
 
     for ( ; i < l; i++ ) {
 
-      x = ys[ i ][ 1 ],
-        px = self.getX( x ),
-        k = 0,
-        y = self.getY( ys[ i ][ 0 ] );
+      x = ys[ i ][ 1 ];
+      px = self.getX( x );
+      k = 0;
+      y = self.getY( ys[ i ][ 0 ] );
 
       if ( px < self.getXAxis().getMinPx() || px > self.getXAxis().getMaxPx() ) {
         continue;
@@ -2171,234 +2326,132 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
       }
     }
 
-  };
+  }
+}
 
-  function drawMarkerXY( graph, family, x, y ) {
+function drawMarkerXY( graph, family, x, y, markerDom ) {
 
-    if ( !family ) {
-      return;
-    }
-
-    if ( graph.options.markersIndependant ) {
-      var dom = graph.getMarkerDomIndependant( graph.counter1, graph.counter2, family );
-      var p = 'M ' + x + ' ' + y + ' ';
-      p += family.markerPath + ' ';
-
-      dom.setAttribute( 'd', p );
-    }
-
-    family.path = family.path ||  "";
-    family.path += 'M ' + x + ' ' + y + ' ';
-    family.path += family.markerPath + ' ';
+  if ( !family ) {
+    return;
   }
 
-  function getDegradedData( graph ) { // Serie redrawing
+  if ( graph.options.markersIndependant ) {
+    var dom = graph.getMarkerDomIndependant( graph.counter1, graph.counter2, family );
+    var p = 'M ' + x + ' ' + y + ' ';
+    p += family.markerPath + ' ';
 
-    var self = graph,
-      xpx,
-      ypx,
-      xpx2,
-      ypx2,
-      i = 0,
-      l = graph.data.length,
-      j = 0,
-      k,
-      m,
-      degradationMin, degradationMax, degradationNb, degradationValue, degradation, degradationMinMax = [],
-      incrXFlip = 0,
-      incrYFlip = 1,
-      degradeFirstX, degradeFirstXPx,
-      optimizeMonotoneous = graph.isXMonotoneous(),
-      optimizeMaxPxX = graph.getXAxis().getMathMaxPx(),
-      optimizeBreak, buffer;
+    dom.setAttribute( 'd', p );
+  }
+
+  markerDom.path = markerDom.path ||  "";
+  markerDom.path += 'M ' + x + ' ' + y + ' ';
+  markerDom.path += family.markerPath + ' ';
+}
+
+function getDegradedData( graph ) { // Serie redrawing
+
+  var self = graph,
+    xpx,
+    ypx,
+    xpx2,
+    ypx2,
+    i = 0,
+    l = graph.data.length,
+    j = 0,
+    k,
+    m,
+    degradationMin, degradationMax, degradationNb, degradationValue, degradation, degradationMinMax = [],
+    incrXFlip = 0,
+    incrYFlip = 1,
+    degradeFirstX, degradeFirstXPx,
+    optimizeMonotoneous = graph.isXMonotoneous(),
+    optimizeMaxPxX = graph.getXAxis().getMathMaxPx(),
+    optimizeBreak, buffer;
+
+  if ( graph.isFlipped() ) {
+    incrXFlip = 1;
+    incrYFlip = 0;
+  }
+
+  var datas = [];
+  var xData = [],
+    dataY = [],
+    sum = 0;
+
+  if ( graph.mode == 'x_equally_separated' ) {
 
     if ( graph.isFlipped() ) {
-      incrXFlip = 1;
-      incrYFlip = 0;
+      return [ graph.data, graph.xData ];
     }
 
-    var datas = [];
-    var xData = [],
-      dataY = [],
-      sum = 0;
-
-    if ( graph.mode == 'x_equally_separated' ) {
-
-      if ( graph.isFlipped() ) {
-        return [ graph.data, graph.xData ];
-      }
-
-      dataY = [];
-
-      for ( ; i < l; i++ ) {
-
-        j = 0, k = 0, m = graph.data[ i ].length;
-
-        var delta = Math.round( graph.degradationPx / graph.getXAxis().getRelPx( graph.xData[ i ].dx ) );
-
-        if ( delta == 1 ) {
-          xData.push( graph.xData[ i ] );
-          datas.push( graph.data[ i ] );
-        }
-
-        degradationMin = Infinity;
-        degradationMax = -Infinity;
-
-        for ( ; j < m; j += 1 ) {
-
-          xpx = graph.xData[ i ].x + j * graph.xData[ i ].dx;
-
-          if ( optimizeMonotoneous && xpx < 0 ) {
-            buffer = [ xpx, ypx, graph.data[ i ][ j ] ];
-            continue;
-          }
-
-          if ( optimizeMonotoneous && buffer ) {
-
-            sum += buffer[ 2 ];
-            degradationMin = Math.min( degradationMin, buffer[ 2 ] );
-            degradationMax = Math.max( degradationMax, buffer[ 2 ] );
-
-            buffer = false;
-            k++;
-          }
-
-          sum += graph.data[ i ][ j ];
-          degradationMin = Math.min( degradationMin, graph.data[ i ][ j ] );
-          degradationMax = Math.max( degradationMax, graph.data[ i ][ j ] );
-
-          if ( ( j % delta == 0 && j > 0 ) || optimizeBreak ) {
-
-            dataY.push( sum / delta );
-
-            degradationMinMax.push( ( graph.xData[ i ].x + j * graph.xData[ i ].dx - ( delta / 2 ) * graph.xData[ i ].dx ), degradationMin, degradationMax );
-
-            degradationMin = Infinity;
-            degradationMax = -Infinity;
-
-            sum = 0;
-          }
-
-          if ( optimizeMonotoneous && xpx > optimizeMaxPxX ) {
-
-            optimizeBreak = true;
-
-            break;
-          }
-
-          k++;
-        }
-
-        datas.push( dataY );
-        xData.push( {
-          dx: delta * graph.xData[ i ].dx,
-          x: graph.xData[ i ].x + ( delta * graph.xData[ i ].dx / 2 )
-        } );
-      }
-
-      if ( graph.degradationSerie ) {
-        graph.degradationSerie.setData( degradationMinMax );
-        graph.degradationSerie.draw();
-      }
-
-      return [ datas, xData ]
-
-    }
+    dataY = [];
 
     for ( ; i < l; i++ ) {
 
-      j = 0,
-        k = 0,
-        m = graph.data[ i ].length;
+      j = 0;
+      k = 0;
+      m = graph.data[ i ].length;
 
-      degradationNb = 0;
-      degradationValue = 0;
+      var delta = Math.round( graph.degradationPx / graph.getXAxis().getRelPx( graph.xData[ i ].dx ) );
+
+      if ( delta == 1 ) {
+        xData.push( graph.xData[ i ] );
+        datas.push( graph.data[ i ] );
+      }
 
       degradationMin = Infinity;
       degradationMax = -Infinity;
 
-      var data = [];
-      for ( ; j < m; j += 2 ) {
+      for ( ; j < m; j += 1 ) {
 
-        xpx2 = graph.getX( graph.data[ i ][ j + incrXFlip ] );
+        xpx = graph.xData[ i ].x + j * graph.xData[ i ].dx;
 
-        if ( optimizeMonotoneous && xpx2 < 0 ) {
-
-          buffer = [
-            xpx2,
-            graph.getY( graph.data[ i ][ j + incrYFlip ] ),
-            graph.data[ i ][ j + incrXFlip ],
-            graph.data[ i ][ j + incrYFlip ]
-          ];
-
+        if ( optimizeMonotoneous && xpx < 0 ) {
+          buffer = [ xpx, ypx, graph.data[ i ][ j ] ];
           continue;
         }
 
         if ( optimizeMonotoneous && buffer ) {
 
-          degradationValue += buffer[  3 ];
-          degradationNb++;
-
-          degradationMin = Math.min( degradationMin, buffer[ 3 ] );
-          degradationMax = Math.max( degradationMax, buffer[ 3 ] );
-
-          degradeFirstX = buffer[  2 ];
-          degradeFirstXPx = buffer[  0 ];
+          sum += buffer[ 2 ];
+          degradationMin = Math.min( degradationMin, buffer[ 2 ] );
+          degradationMax = Math.max( degradationMax, buffer[ 2 ] );
 
           buffer = false;
           k++;
-
-        } else if ( degradeFirstX === undefined ) {
-
-          degradeFirstX = graph.data[ i ][ j + incrXFlip ];
-          degradeFirstXPx = xpx2;
         }
 
-        if ( Math.abs( xpx2 - degradeFirstXPx ) > graph.degradationPx && j < m ) {
+        sum += graph.data[ i ][ j ];
+        degradationMin = Math.min( degradationMin, graph.data[ i ][ j ] );
+        degradationMax = Math.max( degradationMax, graph.data[ i ][ j ] );
 
-          data.push(
-            ( degradeFirstX + graph.data[ i ][ j + incrXFlip ] ) / 2,
-            degradationValue / degradationNb
-          );
+        if ( ( j % delta == 0 && j > 0 ) || optimizeBreak ) {
 
-          degradationMinMax.push( ( graph.data[ i ][ j + incrXFlip ] + degradeFirstX ) / 2, degradationMin, degradationMax );
+          dataY.push( sum / delta );
 
-          if ( degradeFirstXPx > optimizeMaxPxX ) {
+          degradationMinMax.push( ( graph.xData[ i ].x + j * graph.xData[ i ].dx - ( delta / 2 ) * graph.xData[ i ].dx ), degradationMin, degradationMax );
 
-            break;
-          }
-
-          degradeFirstX = undefined;
-          degradationNb = 0;
-          degradationValue = 0;
           degradationMin = Infinity;
           degradationMax = -Infinity;
 
-          k++;
+          sum = 0;
         }
 
-        degradationValue += graph.data[ i ][ j + incrYFlip ];
-        degradationNb++;
-
-        degradationMin = Math.min( degradationMin, graph.data[ i ][ j + incrYFlip ] );
-        degradationMax = Math.max( degradationMax, graph.data[ i ][ j + incrYFlip ] );
-
-        if ( optimizeMonotoneous && xpx2 > optimizeMaxPxX ) {
+        if ( optimizeMonotoneous && xpx > optimizeMaxPxX ) {
 
           optimizeBreak = true;
+
+          break;
         }
 
-        xpx = xpx2;
-        ypx = ypx2;
-
+        k++;
       }
 
-      datas.push( data );
-
-      if ( optimizeBreak ) {
-
-        break;
-      }
+      datas.push( dataY );
+      xData.push( {
+        dx: delta * graph.xData[ i ].dx,
+        x: graph.xData[ i ].x + ( delta * graph.xData[ i ].dx / 2 )
+      } );
     }
 
     if ( graph.degradationSerie ) {
@@ -2406,32 +2459,136 @@ define( [ './graph.serie', './slotoptimizer', '../graph.util', '../mixins/graph.
       graph.degradationSerie.draw();
     }
 
-    return [ datas ];
-  };
-
-  function hidePeakPicking( graph ) {
-
-    if ( !graph.picks ) {
-      return;
-    }
-    for ( var i = 0; i < graph.picks.length; i++ ) {
-      graph.picks[ i ].hide();
-    }
+    return [ datas, xData ]
 
   }
 
-  function showPeakPicking( graph ) {
+  for ( ; i < l; i++ ) {
 
-    if ( !graph.picks ) {
-      return;
+    j = 0;
+    k = 0;
+    m = graph.data[ i ].length;
+
+    degradationNb = 0;
+    degradationValue = 0;
+
+    degradationMin = Infinity;
+    degradationMax = -Infinity;
+
+    var data = [];
+    for ( ; j < m; j += 2 ) {
+
+      xpx2 = graph.getX( graph.data[ i ][ j + incrXFlip ] );
+
+      if ( optimizeMonotoneous && xpx2 < 0 ) {
+
+        buffer = [
+          xpx2,
+          graph.getY( graph.data[ i ][ j + incrYFlip ] ),
+          graph.data[ i ][ j + incrXFlip ],
+          graph.data[ i ][ j + incrYFlip ]
+        ];
+
+        continue;
+      }
+
+      if ( optimizeMonotoneous && buffer ) {
+
+        degradationValue += buffer[  3 ];
+        degradationNb++;
+
+        degradationMin = Math.min( degradationMin, buffer[ 3 ] );
+        degradationMax = Math.max( degradationMax, buffer[ 3 ] );
+
+        degradeFirstX = buffer[  2 ];
+        degradeFirstXPx = buffer[  0 ];
+
+        buffer = false;
+        k++;
+
+      } else if ( degradeFirstX === undefined ) {
+
+        degradeFirstX = graph.data[ i ][ j + incrXFlip ];
+        degradeFirstXPx = xpx2;
+      }
+
+      if ( Math.abs( xpx2 - degradeFirstXPx ) > graph.degradationPx && j < m ) {
+
+        data.push(
+          ( degradeFirstX + graph.data[ i ][ j + incrXFlip ] ) / 2,
+          degradationValue / degradationNb
+        );
+
+        degradationMinMax.push( ( graph.data[ i ][ j + incrXFlip ] + degradeFirstX ) / 2, degradationMin, degradationMax );
+
+        if ( degradeFirstXPx > optimizeMaxPxX ) {
+
+          break;
+        }
+
+        degradeFirstX = undefined;
+        degradationNb = 0;
+        degradationValue = 0;
+        degradationMin = Infinity;
+        degradationMax = -Infinity;
+
+        k++;
+      }
+
+      degradationValue += graph.data[ i ][ j + incrYFlip ];
+      degradationNb++;
+
+      degradationMin = Math.min( degradationMin, graph.data[ i ][ j + incrYFlip ] );
+      degradationMax = Math.max( degradationMax, graph.data[ i ][ j + incrYFlip ] );
+
+      if ( optimizeMonotoneous && xpx2 > optimizeMaxPxX ) {
+
+        optimizeBreak = true;
+      }
+
+      xpx = xpx2;
+      ypx = ypx2;
+
     }
 
-    for ( var i = 0; i < graph.picks.length; i++ ) {
-      graph.picks[ i ].show();
+    datas.push( data );
+
+    if ( optimizeBreak ) {
+
+      break;
     }
   }
 
-  ErrorBarMixin.call( SerieLine.prototype ); // Add error bar mixin
+  if ( graph.degradationSerie ) {
+    graph.degradationSerie.setData( degradationMinMax );
+    graph.degradationSerie.draw();
+  }
 
-  return SerieLine;
-} );
+  return [ datas ];
+}
+
+function hidePeakPicking( graph ) {
+
+  if ( !graph.picks ) {
+    return;
+  }
+  for ( var i = 0; i < graph.picks.length; i++ ) {
+    graph.picks[ i ].hide();
+  }
+
+}
+
+function showPeakPicking( graph ) {
+
+  if ( !graph.picks ) {
+    return;
+  }
+
+  for ( var i = 0; i < graph.picks.length; i++ ) {
+    graph.picks[ i ].show();
+  }
+}
+
+util.mix( SerieLine, ErrorBarMixin );
+
+export default SerieLine

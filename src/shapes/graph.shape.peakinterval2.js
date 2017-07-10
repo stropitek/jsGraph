@@ -1,14 +1,14 @@
-define( [ './graph.shape.line' ], function( GraphLine ) {
+define( [ '../graph.util', './graph.shape.line' ], function( util, GraphLine ) {
 
   "use strict";
   var lineHeight = 5;
 
-  var GraphPeakInterval2 = function( graph, options ) {
+  function GraphPeakInterval2( graph, options ) {
     this.nbHandles = 2;
 
   }
 
-  $.extend( GraphPeakInterval2.prototype, GraphLine.prototype, {
+  util.extend( GraphPeakInterval2.prototype, GraphLine.prototype, {
 
     createDom: function() {
       this._dom = document.createElementNS( this.graph.ns, 'line' );
@@ -131,8 +131,8 @@ define( [ './graph.shape.line' ], function( GraphLine ) {
 
         for ( j = init; j <= max; j += 2 ) {
 
-          x = this.serie.data[ i ][ j + 0 ],
-            y = this.serie.data[ i ][ j + 1 ];
+          x = this.serie.data[ i ][ j + 0 ];
+          y = this.serie.data[ i ][ j + 1 ];
 
           if ( !firstX ) {
             firstX = x;

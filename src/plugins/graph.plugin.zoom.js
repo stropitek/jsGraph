@@ -1,19 +1,28 @@
-define( [ 'jquery', '../graph.util', './graph.plugin', ], function( $, util, Plugin ) {
+import * as util from '../graph.util'
+import Plugin from './graph.plugin'
 
-  /**
-   * @class PluginZoom
-   * @implements Plugin
-   */
-  var PluginZoom = function() {};
+/**
+ * @class PluginZoom
+ * @implements Plugin
+ */
+class PluginZoom extends Plugin {
 
-  PluginZoom.prototype = new Plugin();
+  constructor() {
+    super( ...arguments );
+  }
+
+  static defaults() {
+
+    return {
+      "axes": "all"
+    };
+  }
 
   /**
    * Init method
    * @private
-   * @memberof PluginZoom
    */
-  PluginZoom.prototype.init = function( graph, options ) {
+  init( graph, options ) {
 
     this._zoomingGroup = document.createElementNS( graph.ns, 'g' );
     this._zoomingSquare = document.createElementNS( graph.ns, 'rect' );
@@ -27,20 +36,19 @@ define( [ 'jquery', '../graph.util', './graph.plugin', ], function( $, util, Plu
       'x': 0,
       'y': 0,
       'height': 0,
-      'width': 0
+      'width': 0,
+      'pointer-events': 'none'
     } );
 
-    this.options = options;
     this.graph = graph;
     graph.groupEvent.appendChild( this._zoomingGroup );
     this._zoomingGroup.appendChild( this._zoomingSquare );
-  };
+  }
 
   /**
    * @private
-   * @memberof PluginZoom
    */
-  PluginZoom.prototype.onMouseDown = function( graph, x, y, e, mute ) {
+  onMouseDown( graph, x, y, e, mute ) {
 
     var zoomMode = this.options.zoomMode;
 
@@ -94,18 +102,16 @@ define( [ 'jquery', '../graph.util', './graph.plugin', ], function( $, util, Plu
     if ( this.options.onZoomStart && !mute ) {
       this.options.onZoomStart( graph, x, y, e, mute );
     }
-  };
+  }
 
   /**
    * @private
-   * @memberof PluginZoom
    */
-  PluginZoom.prototype.onMouseMove = function( graph, x, y, e, mute ) {
+  onMouseMove( graph, x, y, e, mute ) {
 
     //	this._zoomingSquare.setAttribute('display', 'none');
 
     //	this._zoomingSquare.setAttribute('transform', 'translate(' + Math.random() + ', ' + Math.random() + ') scale(10, 10)');
-
     switch ( this._zoomingMode ) {
 
       case 'xy':
@@ -143,70 +149,145 @@ define( [ 'jquery', '../graph.util', './graph.plugin', ], function( $, util, Plu
     }
     //		this._zoomingSquare.setAttribute('display', 'block');
 
-  };
+  }
 
   /**
    * @private
-   * @memberof PluginZoom
    */
-  PluginZoom.prototype.onMouseUp = function( graph, x, y, e, mute ) {
+  onMouseUp( graph, x, y, e, mute ) {
 
+    var self = this;
     this.removeZone();
     var _x = x - graph.options.paddingLeft;
     var _y = y - graph.options.paddingTop;
+
+    this.emit( "beforeZoom", {
+      graph: graph,
+      x: x,
+      y: y,
+      e: e,
+      mute: mute
+    } );
+
+    if ( graph.prevent( false ) ) {
+      graph.prevent( true ); // Cancel future click event
+      return;
+    }
 
     if ( ( x - this._zoomingXStart == 0 && this._zoomingMode != 'y' ) || ( y - this._zoomingYStart == 0 && this._zoomingMode != 'x' ) ) {
       return;
     }
 
-    graph.cancelClick = true;
+    if ( this.options.transition || this.options.smooth ) {
 
-    switch ( this._zoomingMode ) {
-      case 'x':
-        graph._applyToAxes( '_doZoom', [ _x, this.x1 ], true, false );
-        break;
-      case 'y':
-        graph._applyToAxes( '_doZoom', [ _y, this.y1 ], false, true );
-        break;
-      case 'xy':
-        graph._applyToAxes( '_doZoom', [ _x, this.x1 ], true, false );
-        graph._applyToAxes( '_doZoom', [ _y, this.y1 ], false, true );
-        break;
+      let modeX = false,
+        modeY = false;
 
-      case 'forceY2':
-        graph._applyToAxes( '_doZoom', [ _x, this.x1 ], true, false );
-        graph._applyToAxes( '_doZoom', [ this.y1, this.y2 ], false, true );
+      if ( this._zoomingMode == 'x' ||  this._zoomingMode == 'xy' || this._zoomingMode == 'forceY2' ) {
 
-        break;
+        this.fullX = false;
+        this.toAxes( function( axis ) {
+
+          axis._pluginZoomMin = axis.getCurrentMin();
+          axis._pluginZoomMax = axis.getCurrentMax();
+
+          axis._pluginZoomMinFinal = Math.min( axis.getVal( _x ), axis.getVal( self.x1 ) );
+          axis._pluginZoomMaxFinal = Math.max( axis.getVal( _x ), axis.getVal( self.x1 ) );
+        }, false, true, false );
+
+        modeX = true;
+
+      }
+
+      if ( this._zoomingMode == 'y' ||  this._zoomingMode == 'xy' ) {
+
+        this.fullY = false;
+        this.toAxes( function( axis ) {
+
+          axis._pluginZoomMin = axis.getCurrentMin();
+          axis._pluginZoomMax = axis.getCurrentMax();
+
+          axis._pluginZoomMinFinal = Math.min( axis.getVal( _y ), axis.getVal( self.y1 ) );
+          axis._pluginZoomMaxFinal = Math.max( axis.getVal( _y ), axis.getVal( self.y1 ) );
+
+        }, false, false, true );
+
+        modeY = true;
+      }
+
+      if ( this._zoomingMode == 'forceY2' ) {
+
+        this.fullY = false;
+        this.toAxes( function( axis ) {
+
+          axis._pluginZoomMin = axis.getCurrentMin();
+          axis._pluginZoomMax = axis.getCurrentMax();
+
+          axis._pluginZoomMinFinal = Math.min( axis.getVal( self.y2 ), axis.getVal( self.y1 ) );
+          axis._pluginZoomMaxFinal = Math.max( axis.getVal( self.y2 ), axis.getVal( self.y1 ) );
+
+        }, false, false, true );
+
+        modeY = true;
+      }
+
+      this.transition( modeX, modeY, "zoomEnd" );
+
+    } else {
+
+      switch ( this._zoomingMode ) {
+        case 'x':
+          this.fullX = false;
+          this.toAxes( '_doZoom', [ _x, this.x1 ], true, false );
+          break;
+        case 'y':
+          this.fullY = false;
+          this.toAxes( '_doZoom', [ _y, this.y1 ], false, true );
+          break;
+        case 'xy':
+          this.fullX = false;
+          this.fullY = false;
+          this.toAxes( '_doZoom', [ _x, this.x1 ], true, false );
+          this.toAxes( '_doZoom', [ _y, this.y1 ], false, true );
+          break;
+
+        case 'forceY2':
+
+          this.fullX = false;
+          this.fullY = false;
+
+          this.toAxes( '_doZoom', [ _x, this.x1 ], true, false );
+          this.toAxes( '_doZoom', [ this.y1, this.y2 ], false, true );
+
+          break;
+      }
+
+      graph.prevent( true );
+      graph.draw();
+
+      if ( this._backedUpZoomMode ) {
+        this._zoomingMode = this._backedUpZoomMode;
+      }
+
+      this.emit( "zoomed" );
+
+      graph.pluginYieldActiveState();
+
     }
 
-    graph.prevent( true );
-    graph.draw();
-
-    if ( this.options.onZoomEnd && !mute ) {
-      this.options.onZoomEnd( graph, _x, _y, e, mute, this.x1, this.y1 );
-    }
-
-    if ( this._backedUpZoomMode ) {
-      this._zoomingMode = this._backedUpZoomMode;
-    }
-
-    this.emit( "zoomed" );
-  };
+  }
 
   /**
    * @private
-   * @memberof PluginZoom
    */
-  PluginZoom.prototype.removeZone = function() {
+  removeZone() {
     this._zoomingSquare.setAttribute( 'display', 'none' );
-  };
+  }
 
   /**
    * @private
-   * @memberof PluginZoom
    */
-  PluginZoom.prototype.onMouseWheel = function( delta, e, options ) {
+  onMouseWheel( delta, e, options ) {
 
     if ( !options ) {
       options = {};
@@ -216,29 +297,29 @@ define( [ 'jquery', '../graph.util', './graph.plugin', ], function( $, util, Plu
       options.baseline = 0;
     }
 
-    var serie;
+    /*var serie;
     if ( ( serie = this.graph.getSelectedSerie() ) ) {
 
       if ( serie.getYAxis().handleMouseWheel( delta, e ) ) {
         return;
       }
-    }
+    }*/
 
     var doX = ( options.direction == 'x' );
     var doY = !( options.direction !== 'y' );
 
-    this.graph._applyToAxes( 'handleMouseWheel', [ delta, e, options.baseline ], doX, doY );
+    this.toAxes( 'handleMouseWheel', [ delta, e, options.baseline ], doX, doY );
 
     this.graph.drawSeries();
 
-  };
+  }
 
   /**
    * @private
-   * @memberof PluginZoom
    */
-  PluginZoom.prototype.onDblClick = function( graph, x, y, pref, e, mute ) {
+  onDblClick( x, y, e, pref, mute ) {
 
+    var graph = this.graph;
     this.emit( "beforeDblClick", {
       graph: graph,
       x: x,
@@ -252,21 +333,94 @@ define( [ 'jquery', '../graph.util', './graph.plugin', ], function( $, util, Plu
       return;
     }
 
+    if ( this.options.transition ||  this.options.smooth ) {
+
+      var modeX = false,
+        modeY = false;
+
+      if ( pref.mode == 'xtotal' ||  pref.mode == 'total' ) {
+
+        this.toAxes( function( axis ) {
+          axis._pluginZoomMin = axis.getCurrentMin();
+          axis._pluginZoomMax = axis.getCurrentMax();
+
+          axis._pluginZoomMinFinal = axis.getMinValue();
+          axis._pluginZoomMaxFinal = axis.getMaxValue();
+
+        }, false, true, false );
+
+        modeX = true;
+
+      }
+
+      if ( pref.mode == 'ytotal' ||  pref.mode == 'total' ) {
+
+        this.toAxes( function( axis ) {
+
+          axis._pluginZoomMin = axis.getCurrentMin();
+          axis._pluginZoomMax = axis.getCurrentMax();
+
+          axis._pluginZoomMinFinal = axis.getMinValue();
+          axis._pluginZoomMaxFinal = axis.getMaxValue();
+
+        }, false, false, true );
+
+        modeY = true;
+
+      }
+
+      if ( pref.mode == 'gradualX' || pref.mode == 'gradualY' ||  pref.mode == 'gradual' ||  pref.mode == 'gradualXY' ) {
+
+        var x = false,
+          y = false;
+
+        if ( pref.mode == 'gradualX' || pref.mode == 'gradual' ||  pref.mode == 'gradualXY' ) {
+          x = true;
+          modeX = true;
+        }
+
+        if ( pref.mode == 'gradualY' || pref.mode == 'gradual' ||  pref.mode == 'gradualXY' ) {
+          y = true;
+          modeY = true;
+        }
+
+        this.toAxes( function( axis ) {
+
+          axis._pluginZoomMin = axis.getCurrentMin();
+          axis._pluginZoomMax = axis.getCurrentMax();
+
+          axis._pluginZoomMinFinal = axis.getCurrentMin() - ( axis.getCurrentMax() - axis.getCurrentMin() );
+          axis._pluginZoomMaxFinal = axis.getCurrentMax() + ( axis.getCurrentMax() - axis.getCurrentMin() );
+
+        }, false, x, y );
+
+      }
+
+      this.transition( modeX, modeY, "dblClick" );
+      return;
+    }
+
     var xAxis = this.graph.getXAxis(),
       yAxis = this.graph.getYAxis();
 
     if ( pref.mode == 'xtotal' ) {
 
-      this.graph._applyToAxes( "setMinMaxToFitSeries", null, true, false );
+      this.toAxes( "setMinMaxToFitSeries", null, true, false );
+      this.fullX = true;
+      this.fullY = false;
 
     } else if ( pref.mode == 'ytotal' ) {
 
-      this.graph._applyToAxes( "setMinMaxToFitSeries", null, false, true );
+      this.toAxes( "setMinMaxToFitSeries", null, false, true );
+      this.fullX = false;
+      this.fullY = true;
 
     } else if ( pref.mode == 'total' ) {
 
-      this.graph.autoscaleAxes();
+      this.toAxes( "setMinMaxToFitSeries", null, true, true );
 
+      this.fullX = true;
+      this.fullY = true;
       // Nothing to do here
       /*        this.graph._applyToAxes( function( axis ) {
 
@@ -301,6 +455,11 @@ define( [ 'jquery', '../graph.util', './graph.plugin', ], function( $, util, Plu
         if ( xAxis.options.onZoom ) {
           xAxis.options.onZoom( xMin, xMax );
         }
+
+        xAxis.cacheCurrentMin();
+        xAxis.cacheCurrentMax();
+        xAxis.cacheInterval();
+
       }
 
       if ( pref.mode == 'gradualXY' || pref.mode == 'gradualY' ) {
@@ -314,21 +473,164 @@ define( [ 'jquery', '../graph.util', './graph.plugin', ], function( $, util, Plu
         if ( yAxis.options.onZoom ) {
           yAxis.options.onZoom( yMin, yMax );
         }
+
+        yAxis.cacheCurrentMin();
+        yAxis.cacheCurrentMax();
+        yAxis.cacheInterval();
+
       }
+
     }
 
+    graph.pluginYieldActiveState();
+
     this.graph.draw();
+    /*
+        this.emit( "dblClick", {
+          graph: graph,
+          x: x,
+          y: y,
+          pref: pref,
+          e: e,
+          mute: mute
+        } );
 
-    this.emit( "dblClick", {
-      graph: graph,
-      x: x,
-      y: y,
-      pref: pref,
-      e: e,
-      mute: mute
+        if ( this.options.onDblClick && !mute ) {
+          this.options.onDblClick( graph, x, y, e, mute );
+        }*/
+
+  }
+
+  transition( modeX, modeY, eventName ) {
+
+    var self = this,
+      maxTime = 500;
+
+    if ( !self.gradualUnzoomStart ) {
+      self.gradualUnzoomStart = Date.now();
+    }
+
+    window.requestAnimationFrame( function() {
+
+      var dt = Date.now() - self.gradualUnzoomStart;
+
+      if ( dt > maxTime ) {
+        dt = maxTime;
+      }
+      var progress = Math.sin( dt / maxTime * Math.PI / 2 );
+
+      self.toAxes( function( axis ) {
+
+        axis.setCurrentMin( axis._pluginZoomMin + ( axis._pluginZoomMinFinal - axis._pluginZoomMin ) * progress );
+        axis.setCurrentMax( axis._pluginZoomMax + ( axis._pluginZoomMaxFinal - axis._pluginZoomMax ) * progress );
+
+        axis.cacheCurrentMin();
+        axis.cacheCurrentMax();
+        axis.cacheInterval();
+
+      }, false, modeX, modeY );
+
+      self.graph.draw();
+
+      if ( dt < maxTime ) {
+
+        self.transition( modeX, modeY, eventName );
+        self.emit( "zooming" );
+
+      } else {
+
+        self.emit( "zoomed" );
+        self.graph.pluginYieldActiveState();
+
+        if ( eventName ) {
+          self.emit( eventName )
+        }
+        self.gradualUnzoomStart = 0;
+
+      }
+
     } );
+  }
 
-  };
+  isFullX() {
+    return this.fullX;
+  }
 
-  return PluginZoom;
-} );
+  isFullY() {
+    return this.fullY;
+  }
+
+  toAxes( func, params, tb, lr ) {
+
+    var axes = this.options.axes;
+
+    if ( !axes || ( axes == 'serieSelected' && !this.graph.getSelectedSerie() ) ) {
+      axes = 'all';
+    }
+
+    switch ( axes ) {
+
+      case 'all':
+        this.graph._applyToAxes.apply( this.graph, arguments );
+        break;
+
+      case 'serieSelected':
+
+        var serie = this.graph.getSelectedSerie();
+        if ( serie ) {
+
+          if ( tb ) {
+
+            if ( typeof func == "string" ) {
+              serie.getXAxis()[ func ].apply( serie.getXAxis(), params )
+            } else {
+              func.apply( serie.getXAxis(), params );
+            }
+          }
+
+          if ( lr ) {
+
+            if ( typeof func == "string" ) {
+              serie.getYAxis()[ func ].apply( serie.getYAxis(), params )
+            } else {
+              func.apply( serie.getYAxis(), params );
+            }
+
+          }
+        }
+
+        break;
+
+      default:
+
+        if ( !Array.isArray( axes ) ) {
+          axes = [ axes ];
+        }
+
+        for ( let axis of axes ) {
+
+          if ( axis.isX() && tb ) { // Not the best check
+
+            if ( typeof func == "string" ) {
+              axis[ func ].apply( axis, params )
+            } else {
+              func.apply( axis, params );
+            }
+
+          } else if ( axis.isY() && lr ) { // Not the best check
+
+            if ( typeof func == "string" ) {
+              axis[ func ].apply( axis, params )
+            } else {
+              func.apply( axis, params );
+            }
+
+          }
+        }
+        break;
+    }
+  }
+
+}
+
+export default PluginZoom;

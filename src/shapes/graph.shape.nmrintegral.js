@@ -1,56 +1,79 @@
-define( [ './graph.shape.areaundercurve', '../graph.position' ], function( GraphSurfaceUnderCurve, GraphPosition ) {
+import ShapeSurfaceUnderCurve from './graph.shape.areaundercurve'
+import GraphPosition from '../graph.position'
 
-  "use strict";
+/**
+ * Displays an integral with NMR style
+ * @extends ShapeSurfaceUnderCurve
+ */
+class ShapeNMRIntegral extends ShapeSurfaceUnderCurve {
 
-  var GraphNMRIntegral = function( graph, options ) {
+  constructor( graph, options ) {
+    super( graph, options );
     this.nbHandles = 2;
   }
 
-  $.extend( GraphNMRIntegral.prototype, GraphSurfaceUnderCurve.prototype, {
+  createHandles() {
 
-    applyPosition: function() {
+    this._createHandles( 2, 'rect', {
+      transform: "translate(-3 -3)",
+      width: 6,
+      height: 6,
+      stroke: "black",
+      fill: "white"
+    } );
+  }
 
-      var posXY = this.calculatePosition( 0 ),
-        posXY2 = this.calculatePosition( 1 ),
-        w, x,
-        axis = this.getAxis();
+  applyPosition() {
 
-      var baseLine = this.yBaseline || 30;
+    var posXY = this.calculatePosition( 0 ),
+      posXY2 = this.calculatePosition( 1 ),
+      w,
+      x,
+      axis = this.getAxis(),
+      points = [];
 
-      if ( !posXY ||  !posXY2 ) {
-        return;
-      }
+    let baseLine = this.yBaseline;
 
-      if ( !this.serie.isFlipped() ) {
+    if ( !posXY ||  !posXY2 ) {
+      return;
+    }
 
-        baseLine = this.getYAxis().getPx( 0 ) - baseLine;
+    if ( !this.serie.isFlipped() ) {
 
-        w = Math.abs( posXY.x - posXY2.x );
-        x = Math.min( posXY.x, posXY2.x );
+      baseLine = this.getYAxis().getPx( 0 ) - baseLine;
 
-      } else {
+      w = Math.abs( posXY.x - posXY2.x );
+      x = Math.min( posXY.x, posXY2.x );
 
-        baseLine = this.getXAxis().getPx( 0 ) - baseLine;
+    } else {
 
-        w = Math.abs( posXY.y - posXY2.y );
-        x = Math.min( posXY.y, posXY2.y );
-      }
+      baseLine = this.getXAxis().getPx( 0 ) - baseLine;
 
-      this.computedBaseline = baseLine;
-      this.reversed = x == posXY2.x;
+      w = Math.abs( posXY.y - posXY2.y );
+      x = Math.min( posXY.y, posXY2.y );
+    }
 
-      if ( axis == 'x' ) {
-        if ( w < 2 || x + w < 0 || x > this.graph.getDrawingWidth() ) {
-          return false;
-        }
-      } else {
-        if ( w < 2 || x + w < 0 || x > this.graph.getDrawingHeight() ) {
-          return false;
-        }
-      }
+    this.computedBaseline = baseLine;
+    this.reversed = x == posXY2.x;
 
-      var pos1 = this.getPosition( 0 );
-      var pos2 = this.getPosition( 1 );
+    var pos1 = this.getPosition( 0 );
+    var pos2 = this.getPosition( 1 );
+
+    if (
+      ( axis == 'x' && ( w < 2 || x + w < 0 || x > this.graph.getDrawingWidth() ) ) ||
+      ( axis == 'y' && ( w < 2 || x + w < 0 || x > this.graph.getDrawingHeight() ) )
+    ) {
+
+      points = [
+        [ 0, 0 ]
+      ];
+      this.hideLabel( 0 );
+      this.setDom( "d", "" );
+      this.hideHandles();
+
+    } else {
+
+      this.showLabel( 0 );
 
       var v1 = this.serie.searchClosestValue( pos1[ axis ] ),
         v2 = this.serie.searchClosestValue( pos2[ axis ] ),
@@ -74,6 +97,9 @@ define( [ './graph.shape.areaundercurve', '../graph.position' ], function( Graph
         return false;
       }
 
+      posXY.y = v1.yMin;
+      posXY2.y = v2.yMin;
+
       if ( v1.xBeforeIndex > v2.xBeforeIndex ) {
         v3 = v1;
         v1 = v2;
@@ -83,7 +109,6 @@ define( [ './graph.shape.areaundercurve', '../graph.position' ], function( Graph
       var firstX, firstY, lastX, lastY, firstXVal, firstYVal, lastXVal, lastYVal, sum = 0,
         diff;
       var ratio = this.scaling;
-      var points = [];
 
       if ( this.serie.isFlipped() ) {
         incrYFlip = 0;
@@ -98,8 +123,8 @@ define( [ './graph.shape.areaundercurve', '../graph.position' ], function( Graph
 
         for ( j = init; j <= max; j += 2 ) {
 
-          x = this.serie.getX( this.serie.data[ i ][ j + incrXFlip ] ),
-            y = this.serie.getY( this.serie.data[ i ][ j + incrYFlip ] );
+          x = this.serie.getX( this.serie.data[ i ][ j + incrXFlip ] );
+          y = this.serie.getY( this.serie.data[ i ][ j + incrYFlip ] );
 
           if ( this.serie.isFlipped() ) {
             var x2 = x;
@@ -126,11 +151,11 @@ define( [ './graph.shape.areaundercurve', '../graph.position' ], function( Graph
 
           sum += ( this.serie.data[ i ][ j + incrXFlip ] - lastXVal ) * ( this.serie.data[ i ][ j + incrYFlip ] ) * 0.5;
 
+          lastXVal = this.serie.data[ i ][ j + incrXFlip ];
+
           if ( x == lastX && y == lastY ) {
             continue;
           }
-
-          lastXVal = this.serie.data[ i ][ j + incrXFlip ];
 
           lastX = x;
           lastY = y;
@@ -152,32 +177,30 @@ define( [ './graph.shape.areaundercurve', '../graph.position' ], function( Graph
         sum = 1; // Will look line a line anyway
       }
 
-      this.maxPx = this._data.maxPx || 50;
+      var ratio;
 
-      if ( !this.ratio ) {
-        this.ratio = 1;
+      if ( !this._ratio ) {
+        ratio = 150 / sum;
+      } else {
+        ratio = this._ratio;
       }
-
-      var integration = this.maxIntegration || sum;
 
       for ( var i = 0, l = points.length; i < l; i++ ) {
         //   console.log( points[ i ][ 1 ] / sum );
-        points[ i ][ 1 ] = baseLine - ( points[ i ][ 1 ] / sum ) * ( this.maxPx ) * ( sum / integration ) * this.ratio;
+        points[ i ][ 1 ] = baseLine - ( points[ i ][ 1 ] ) * ratio;
 
-        /* console.log( this.ratio, integration );
-        console.log( this.maxPx );
-        console.log( points[ i ][ 1 ] );
-*/
         if ( i == 0 ) {
+          this.firstPointX = points[ i ][ 0 ];
           this.firstPointY = points[ i ][ 1 ];
         }
         currentLine += " L " + points[ i ][ incrXFlip ] + ", " + points[ i ][ incrYFlip ] + " ";
 
+        this.lastPointX = points[ i ][ 0 ];
         this.lastPointY = points[ i ][ 1 ];
       }
 
       this.points = points;
-      this.lastSum = Math.abs( sum );
+      this.sum = sum;
 
       var lastY = firstY,
         lastX = this.lastX;
@@ -201,52 +224,82 @@ define( [ './graph.shape.areaundercurve', '../graph.position' ], function( Graph
         this.select();
       }
 
-      this.setLabelPosition( new GraphPosition( {
-        x: ( pos1.x + pos2.x ) / 2,
-        y: ( this.firstPointY + this.lastPointY ) / 2 + "px"
-      } ) );
-
       this.setHandles();
-
-      return true;
-    },
-
-    getAxis: function() {
-      return this._data.axis ||  'x';
-    },
-
-    setScale: function( maxPx, integration ) {
-      this.maxPx = maxPx;
-      this.maxIntegration = integration;
-    },
-
-    setYBaseline: function( y ) {
-      this.yBasline = y;
-    },
-
-    selectStyle: function() {
-      this.setDom( 'stroke-width', '2px' );
-    },
-
-    selectHandles: function() {}, // Cancel areaundercurve
-
-    setHandles: function() {
-
-      if ( !this._selected || this.points == undefined ) {
-        return;
-      }
-
-      this.addHandles();
-
-      this.handle1.setAttribute( 'x', this.points[ 0 ][ 0 ] );
-      this.handle1.setAttribute( 'y', this.points[ 0 ][ 1 ] );
-
-      this.handle2.setAttribute( 'x', this.points[ this.points.length - 1 ][ 0 ] - 1 );
-      this.handle2.setAttribute( 'y', this.points[ this.points.length - 1 ][ 1 ] );
 
     }
 
-  } );
+    this.setLabelPosition( new GraphPosition( {
+      x: ( pos1.x + pos2.x ) / 2,
+      y: ( this.firstPointY + this.lastPointY ) / 2 + "px"
+    } ) );
 
-  return GraphNMRIntegral;
-} );
+    this.updateLabels();
+    this.changed();
+
+    return true;
+  }
+
+  getAxis() {
+    return this._data.axis ||  'x';
+  }
+
+  /**
+   * User to screen coordinate transform. In (unit)/(px), (unit) being the unit of the integral (x * y)
+   * @type {Number}
+   */
+  set ratio( r = 1 ) {
+    this._ratio = r;
+  }
+
+  get ratio() {
+    return this._ratio;
+  }
+
+  set yBaseline( y = 30 ) {
+    this._yBaseline = y;
+  }
+
+  get yBaseline() {
+    return this._yBaseline || 30;
+  }
+
+  selectStyle() {
+    this.setDom( 'stroke-width', '2px' );
+  }
+
+  selectHandles() {} // Cancel areaundercurve
+
+  setHandles() {
+
+    if ( this.points == undefined ) {
+      return;
+    }
+
+    if ( !this.isSelected() ) {
+      return;
+    }
+
+    this.addHandles();
+
+    var posXY = this.computePosition( 0 ),
+      posXY2 = this.computePosition( 1 );
+
+    if ( posXY.x < posXY2.x ) {
+
+      this.handles[ 1 ].setAttribute( 'x', this.firstPointX );
+      this.handles[ 1 ].setAttribute( 'y', this.firstPointY );
+      this.handles[ 2 ].setAttribute( 'x', this.lastPointX );
+      this.handles[ 2 ].setAttribute( 'y', this.lastPointY );
+
+    } else {
+
+      this.handles[ 2 ].setAttribute( 'x', this.firstPointX );
+      this.handles[ 2 ].setAttribute( 'y', this.firstPointY );
+      this.handles[ 1 ].setAttribute( 'x', this.lastPointX );
+      this.handles[ 1 ].setAttribute( 'y', this.lastPointY );
+
+    }
+  }
+}
+
+export default ShapeNMRIntegral;
